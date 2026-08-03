@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель Вчителя — Шкільний Портал</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4">
+        <div class="container">
+            <span class="navbar-brand">Панель Вчителя</span>
+            <a href="/logout" class="btn btn-outline-light btn-sm">Вийти</a>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card shadow-sm mb-4">
+                    <div class="card-body">
+                        <h4 class="card-title mb-3">Виставити оцінку</h4>
+                        <form action="/add_grade" method="POST" class="row g-3">
+                            <div class="col-md-4">
+                                <label for="student_email" class="form-label">Email учня</label>
+                                <input type="email" class="form-control" name="student_email" required placeholder="student@school.com">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="subject" class="form-label">Предмет</label>
+                                <input type="text" class="form-control" name="subject" required placeholder="Математика">
+                            </div>
+                            <div class="col-md-2">
+                                <label for="grade" class="form-label">Оцінка</label>
+                                <input type="number" class="form-control" name="grade" min="1" max="12" required placeholder="12">
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end">
+                                <button type="submit" class="btn btn-success w-100">Додати</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
