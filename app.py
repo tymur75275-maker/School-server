@@ -1,33 +1,17 @@
 import os
-import sqlite3
 from flask import Flask, render_template, request, redirect, url_for, session
+from pyairtable import Api
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'default_secret_key_for_dev')
 
-def init_db():
-    conn = sqlite3.connect('grades.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT UNIQUE NOT NULL,
-            password TEXT NOT NULL,
-            role TEXT NOT NULL
-        )
-    ''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS grades (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            student_email TEXT NOT NULL,
-            subject TEXT NOT NULL,
-            grade INTEGER NOT NULL
-        )
-    ''')
-    conn.commit()
-    conn.close()
+# Отримуємо ключі з змінних оточення Render
+AIRTABLE_API_KEY = os.environ.get('AIRTABLE_API_KEY')
+AIRTABLE_BASE_ID = os.environ.get('AIRTABLE_BASE_ID')
 
-init_db()
+# Підключаємося до Airtable
+api = Api(AIRTABLE_API_KEY)
+grades_table = api.table(AIRTABLE_BASE_ID, 'Grades')
 
 @app.route('/')
 def home():
@@ -43,7 +27,7 @@ def login():
         email = request.form.get('email')
         password = request.form.get('password')
         
-        # Тимчасова перевірка для тестування
+        # Тимчасова перевірка входу
         if email == 'teacher@school.com' and password == 'admin123':
             session['user'] = email
             session['role'] = 'teacher'
@@ -60,12 +44,16 @@ def student_dashboard():
     if session.get('role') != 'student':
         return redirect(url_for('login'))
     
-    # Витягуємо оцінки ЛИШЕ поточного учня з бази
-    conn = sqlite3.connect('grades.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT subject, grade FROM grades WHERE student_email = ?', (session['user'],))
-    student_grades = cursor.fetchall()
-    conn.close()
+    # Витягуємо оцінки поточного учня з Airtable
+    # Припустимо, що в Airtable колонки називаються: Student_Email, Subject, Grade
+    records = grades_table.all(formula=f"{{Student_Email}} = '{session['user']}'")
+    
+    student_grades = []
+    for record in records:
+        fields = record['fields']
+        subject = fields.get('Subject', '')
+        grade = fields.get('Grade', '')
+        student_grades.append((subject, grade))
     
     return render_template('student.html', grades=student_grades, email=session['user'])
 
@@ -74,12 +62,16 @@ def teacher_dashboard():
     if session.get('role') != 'teacher':
         return redirect(url_for('login'))
     
-    # Витягуємо всі оцінки для перегляду вчителем
-    conn = sqlite3.connect('grades.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT student_email, subject, grade FROM grades')
-    all_grades = cursor.fetchall()
-    conn.close()
+    # Витягуємо всі оцінки з Airtable для вчителя
+    records = grades_table.all()
+    
+    all_grades = []
+    for record in records:
+        fields = record['fields']
+        student = fields.get('Student_Email', '')
+        subject = fields.get('Subject', '')
+        grade = fields.get('Grade', '')
+        all_grades.append((student, subject, grade))
     
     return render_template('teacher.html', grades=all_grades)
 
@@ -93,12 +85,12 @@ def add_grade():
     grade = request.form.get('grade')
     
     if student_email and subject and grade:
-        conn = sqlite3.connect('grades.db')
-        cursor = conn.cursor()
-        cursor.execute('INSERT INTO grades (student_email, subject, grade) VALUES (?, ?, ?)',
-                       (student_email, subject, int(grade)))
-        conn.commit()
-        conn.close()
+        # Записуємо нову оцінку в Airtable
+        grades_table.create({
+            'Student_Email': student_email,
+            'Subject': subject,
+            'Grade': int(grade)
+        })
         
     return redirect(url_for('teacher_dashboard'))
 
