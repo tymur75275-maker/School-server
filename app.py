@@ -11,7 +11,7 @@ AIRTABLE_BASE_ID = os.environ.get('AIRTABLE_BASE_ID')
 
 # Підключаємося до Airtable
 api = Api(AIRTABLE_API_KEY)
-grades_table = api.table(AIRTABLE_BASE_ID, 'Grades')
+grades_table = api.table(AIRTABLE_BASE_ID, 'Оцінки')
 
 @app.route('/')
 def home():
@@ -44,15 +44,14 @@ def student_dashboard():
     if session.get('role') != 'student':
         return redirect(url_for('login'))
     
-    # Витягуємо оцінки поточного учня з Airtable
-    # Припустимо, що в Airtable колонки називаються: Student_Email, Subject, Grade
-    records = grades_table.all(formula=f"{{Student_Email}} = '{session['user']}'")
+    # Витягуємо оцінки поточного учня з Airtable за його Email
+    records = grades_table.all(formula=f"{{Email учня}} = '{session['user']}'")
     
     student_grades = []
     for record in records:
         fields = record['fields']
-        subject = fields.get('Subject', '')
-        grade = fields.get('Grade', '')
+        subject = fields.get('Предмет', '')
+        grade = fields.get('Оцінка', '')
         student_grades.append((subject, grade))
     
     return render_template('student.html', grades=student_grades, email=session['user'])
@@ -68,9 +67,9 @@ def teacher_dashboard():
     all_grades = []
     for record in records:
         fields = record['fields']
-        student = fields.get('Student_Email', '')
-        subject = fields.get('Subject', '')
-        grade = fields.get('Grade', '')
+        student = fields.get('Email учня', '')
+        subject = fields.get('Предмет', '')
+        grade = fields.get('Оцінка', '')
         all_grades.append((student, subject, grade))
     
     return render_template('teacher.html', grades=all_grades)
@@ -85,11 +84,11 @@ def add_grade():
     grade = request.form.get('grade')
     
     if student_email and subject and grade:
-        # Записуємо нову оцінку в Airtable
+        # Записуємо нову оцінку в Airtable з точними назвами полів
         grades_table.create({
-            'Student_Email': student_email,
-            'Subject': subject,
-            'Grade': int(grade)
+            'Email учня': student_email,
+            'Предмет': subject,
+            'Оцінка': int(grade)
         })
         
     return redirect(url_for('teacher_dashboard'))
