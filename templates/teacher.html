@@ -16,8 +16,8 @@
 
     <div class="container">
         <div class="row">
-            <div class="col-md-12">
-                <div class="card shadow-sm mb-4">
+            <div class="col-md-12 mb-4">
+                <div class="card shadow-sm">
                     <div class="card-body">
                         <h4 class="card-title mb-3">Виставити оцінку</h4>
                         <form action="/add_grade" method="POST" class="row g-3">
@@ -37,6 +37,36 @@
                                 <button type="submit" class="btn btn-success w-100">Додати</button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-12">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h4 class="card-title mb-3">Журнал усіх оцінок</h4>
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Email учня</th>
+                                    <th>Предмет</th>
+                                    <th>Оцінка</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for student, subject, grade in grades %}
+                                <tr>
+                                    <td>{{ student }}</td>
+                                    <td>{{ subject }}</td>
+                                    <td><span class="badge bg-secondary fs-6">{{ grade }}</span></td>
+                                </tr>
+                                {% else %}
+                                <tr>
+                                    <td colspan="3" class="text-muted text-center">Жодної оцінки ще не виставлено.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
