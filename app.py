@@ -3,13 +3,11 @@ import sqlite3
 from flask import Flask, render_template, request, redirect, url_for, session
 
 app = Flask(__name__)
-# Секретний ключ для сесій (зчитуємо із змінних оточення або ставимо дефолтний для тесту)
 app.secret_key = os.environ.get('SECRET_KEY', 'default_secret_key_for_dev')
 
 def init_db():
     conn = sqlite3.connect('grades.db')
     cursor = conn.cursor()
-    # Таблиця користувачів
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -18,7 +16,6 @@ def init_db():
             role TEXT NOT NULL
         )
     ''')
-    # Таблиця оцінок
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS grades (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,8 +43,7 @@ def login():
         email = request.form.get('email')
         password = request.form.get('password')
         
-        # Тут буде перевірка користувача з бази даних
-        # Тимчасова заглушка для перевірки:
+        # Тимчасова перевірка для тестування
         if email == 'teacher@school.com' and password == 'admin123':
             session['user'] = email
             session['role'] = 'teacher'
@@ -63,13 +59,48 @@ def login():
 def student_dashboard():
     if session.get('role') != 'student':
         return redirect(url_for('login'))
-    return f"Вітаємо, учень {session['user']}! Тут будуть ваші оцінки."
+    
+    # Витягуємо оцінки ЛИШЕ поточного учня з бази
+    conn = sqlite3.connect('grades.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT subject, grade FROM grades WHERE student_email = ?', (session['user'],))
+    student_grades = cursor.fetchall()
+    conn.close()
+    
+    return render_template('student.html', grades=student_grades, email=session['user'])
 
 @app.route('/teacher')
 def teacher_dashboard():
     if session.get('role') != 'teacher':
         return redirect(url_for('login'))
-    return f"Вітаємо, вчителю {session['user']}! Тут буде панель керування оцінками."
+    
+    # Витягуємо всі оцінки для перегляду вчителем
+    conn = sqlite3.connect('grades.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT student_email, subject, grade FROM grades')
+    all_grades = cursor.fetchall()
+    conn.close()
+    
+    return render_template('teacher.html', grades=all_grades)
+
+@app.route('/add_grade', methods=['POST'])
+def add_grade():
+    if session.get('role') != 'teacher':
+        return redirect(url_for('login'))
+    
+    student_email = request.form.get('student_email')
+    subject = request.form.get('subject')
+    grade = request.form.get('grade')
+    
+    if student_email and subject and grade:
+        conn = sqlite3.connect('grades.db')
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO grades (student_email, subject, grade) VALUES (?, ?, ?)',
+                       (student_email, subject, int(grade)))
+        conn.commit()
+        conn.close()
+        
+    return redirect(url_for('teacher_dashboard'))
 
 @app.route('/logout')
 def logout():
