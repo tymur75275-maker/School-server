@@ -114,19 +114,23 @@ def add_grade():
     if request.method == 'GET':
         return redirect(url_for('teacher_dashboard'))
     
-    student_email = request.form.get('student_email')
-    subject_id = request.form.get('subject_id')  # Тепер отримуємо прямо Record ID
-    grade = request.form.get('grade')
-    
-    if student_email and subject_id and grade:
-        grades_table.create({
-            'Email учня': student_email,
-            'Предмет': [subject_id],  # Записуємо Record ID у вигляді списку
-            'Оцінка': int(grade)
-        })
+    try:
+        student_email = request.form.get('student_email')
+        subject_id = request.form.get('subject_id')
+        grade = request.form.get('grade')
         
-    return redirect(url_for('teacher_dashboard'))
+        if student_email and subject_id and grade:
+            grades_table.create({
+                'Email учня': student_email,
+                'Предмет': [subject_id],
+                'Оцінка': int(grade)
+            })
+            
+        return redirect(url_for('teacher_dashboard'))
 
+    except Exception as e:
+        # Виводимо точний текст помилки замість крашу 500
+        return f"<h3>Виникла помилка під час збереження:</h3><pre>{str(e)}</pre><br><a href='/teacher'>Повернутися назад</a>", 500
 @app.route('/logout')
 def logout():
     session.clear()
