@@ -98,17 +98,20 @@ def teacher_dashboard():
     
     return render_template('teacher.html', grades=all_grades)
 
-@app.route('/add_grade', methods=['POST'])
+@app.route('/add_grade', methods=['GET', 'POST'])
 def add_grade():
     if session.get('role') != 'teacher':
         return redirect(url_for('login'))
+    
+    # Якщо хтось випадково відкрив сторінку через браузер (GET-запит)
+    if request.method == 'GET':
+        return redirect(url_for('teacher_dashboard'))
     
     student_email = request.form.get('student_email')
     subject = request.form.get('subject')
     grade = request.form.get('grade')
     
     if student_email and subject and grade:
-        # Записуємо нову оцінку в Airtable з точними назвами полів
         grades_table.create({
             'Email учня': student_email,
             'Предмет': subject,
