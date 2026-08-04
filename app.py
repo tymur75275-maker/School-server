@@ -71,7 +71,7 @@ def student_dashboard():
     for record in records:
         fields = record['fields']
         # Очищаємо від списків ['...']
-        subject = clean_value(fields.get('Предмет'))
+        subject = clean_value(fields.get('Назва предмета'))
         grade = clean_value(fields.get('Оцінка'))
         student_grades.append((subject, grade))
     
@@ -90,7 +90,7 @@ def teacher_dashboard():
         fields = record['fields']
         # Очищаємо всі поля від списків ['...']
         student = clean_value(fields.get('Email учня'))
-        subject = clean_value(fields.get('Предмет'))
+        subject = clean_value(fields.get('Назва предмета'))
         grade = clean_value(fields.get('Оцінка'))
         all_grades.append((student, subject, grade))
     
