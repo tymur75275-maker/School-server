@@ -14,6 +14,7 @@ api = Api(AIRTABLE_API_KEY)
 grades_table = api.table(AIRTABLE_BASE_ID, 'Оцінки')
 users_table = api.table(AIRTABLE_BASE_ID, 'Users')
 subjects_table = api.table(AIRTABLE_BASE_ID, 'Предмети')
+students_table = api.table(AIRTABLE_BASE_ID, 'Учні') # або 'Users', залежно від того, де лежать email учнів
 
 def clean_value(val):
     """Якщо значення прийшло як список ['...'], витягуємо перший елемент"""
@@ -85,7 +86,7 @@ def teacher_dashboard():
     if session.get('role') != 'teacher':
         return redirect(url_for('login'))
     
-    # Витягуємо всі оцінки з Airtable
+    # 1. Отримуємо всі оцінки для журналу
     records = grades_table.all()
     all_grades = []
     for record in records:
@@ -95,7 +96,7 @@ def teacher_dashboard():
         grade = clean_value(fields.get('Оцінка'))
         all_grades.append((student, subject, grade))
     
-    # Витягуємо список предметів для випадаючого списку (ID та Назва)
+    # 2. Отримуємо список предметів (ID та Назва предмета)
     subject_records = subjects_table.all()
     subjects_list = []
     for s in subject_records:
@@ -103,8 +104,17 @@ def teacher_dashboard():
         s_name = clean_value(s['fields'].get('Назва предмета'))
         if s_name:
             subjects_list.append((s_id, s_name))
+
+    # 3. Отримуємо список учнів (ID та Ім'я учня)
+    student_records = students_table.all()
+    students_list = []
+    for st in student_records:
+        st_id = st['id']
+        st_name = clean_value(st['fields'].get("Ім'я учня"))
+        if st_name:
+            students_list.append((st_id, st_name))
             
-    return render_template('teacher.html', grades=all_grades, subjects=subjects_list)
+    return render_template('teacher.html', grades=all_grades, subjects=subjects_list, students=students_list)
 
 @app.route('/add_grade', methods=['GET', 'POST'])
 def add_grade():
@@ -115,13 +125,14 @@ def add_grade():
         return redirect(url_for('teacher_dashboard'))
     
     try:
-        student_email = request.form.get('student_email')
+        student_id = request.form.get('student_id')
         subject_id = request.form.get('subject_id')
         grade = request.form.get('grade')
         
-        if student_email and subject_id and grade:
+        if student_id and subject_id and grade:
+            # Створюємо запис в Airtable, передаючи ID учня та ID предмета
             grades_table.create({
-                'Email учня': student_email,
+                'Учень': [student_id],
                 'Предмет': [subject_id],
                 'Оцінка': int(grade)
             })
@@ -129,7 +140,6 @@ def add_grade():
         return redirect(url_for('teacher_dashboard'))
 
     except Exception as e:
-        # Виводимо точний текст помилки замість крашу 500
         return f"<h3>Виникла помилка під час збереження:</h3><pre>{str(e)}</pre><br><a href='/teacher'>Повернутися назад</a>", 500
 @app.route('/logout')
 def logout():
