@@ -73,9 +73,10 @@ def teacher_dashboard():
     all_grades = []
     for record in records:
         fields = record['fields']
-        student = fields.get('Email учня', '')
-        subject = fields.get('Предмет', '')
-        grade = fields.get('Оцінка', '')
+        # Очищаємо всі поля від списків ['...']
+        student = clean_value(fields.get('Email учня'))
+        subject = clean_value(fields.get('Предмет'))
+        grade = clean_value(fields.get('Оцінка'))
         all_grades.append((student, subject, grade))
     
     return render_template('teacher.html', grades=all_grades)
