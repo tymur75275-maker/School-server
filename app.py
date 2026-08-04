@@ -55,8 +55,9 @@ def student_dashboard():
     student_grades = []
     for record in records:
         fields = record['fields']
-        subject = fields.get('Предмет', '')
-        grade = fields.get('Оцінка', '')
+        # Очищаємо від списків ['...']
+        subject = clean_value(fields.get('Предмет'))
+        grade = clean_value(fields.get('Оцінка'))
         student_grades.append((subject, grade))
     
     return render_template('student.html', grades=student_grades, email=session['user'])
