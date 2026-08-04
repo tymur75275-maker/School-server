@@ -12,6 +12,7 @@ AIRTABLE_BASE_ID = os.environ.get('AIRTABLE_BASE_ID')
 # Підключаємося до Airtable
 api = Api(AIRTABLE_API_KEY)
 grades_table = api.table(AIRTABLE_BASE_ID, 'Оцінки')
+users_table = api.table(AIRTABLE_BASE_ID, 'Users')
 
 def clean_value(val):
     """Якщо значення прийшло як список ['...'], витягуємо перший елемент"""
@@ -28,21 +29,34 @@ def home():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    error = None
     if request.method == 'POST':
-        email = request.form.get('email')
-        password = request.form.get('password')
+        email = request.form.get('email', '').strip()
+        password = request.form.get('password', '').strip()
         
-        # Тимчасова перевірка входу
-        if email == 'teacher@school.com' and password == 'admin123':
-            session['user'] = email
-            session['role'] = 'teacher'
-            return redirect(url_for('teacher_dashboard'))
-        elif email and password:
-            session['user'] = email
-            session['role'] = 'student'
-            return redirect(url_for('student_dashboard'))
+        # Шукаємо користувача в таблиці Users за введеним Email
+        records = users_table.all(formula=f"{{Email}} = '{email}'")
+        
+        if records:
+            user_fields = records[0]['fields']
+            stored_password = clean_value(user_fields.get('Password'))
+            user_role = clean_value(user_fields.get('Role'))
             
-    return render_template('login.html')
+            # Перевіряємо, чи збігається пароль
+            if str(stored_password) == password:
+                session['user'] = email
+                if str(user_role).lower() in ['teacher', 'admin']:
+                    session['role'] = 'teacher'
+                    return redirect(url_for('teacher_dashboard'))
+                else:
+                    session['role'] = 'student'
+                    return redirect(url_for('student_dashboard'))
+            else:
+                error = 'Неправильний пароль'
+        else:
+            error = 'Користувача з таким Email не знайдено'
+            
+    return render_template('login.html', error=error)
 
 @app.route('/student')
 def student_dashboard():
