@@ -85,19 +85,26 @@ def teacher_dashboard():
     if session.get('role') != 'teacher':
         return redirect(url_for('login'))
     
-    # Витягуємо всі оцінки з Airtable для вчителя
+    # Витягуємо всі оцінки з Airtable
     records = grades_table.all()
-    
     all_grades = []
     for record in records:
         fields = record['fields']
-        # Очищаємо всі поля від списків ['...']
         student = clean_value(fields.get('Email учня'))
         subject = clean_value(fields.get('Назва предмета'))
         grade = clean_value(fields.get('Оцінка'))
         all_grades.append((student, subject, grade))
     
-    return render_template('teacher.html', grades=all_grades)
+    # Витягуємо список предметів для випадаючого списку (ID та Назва)
+    subject_records = subjects_table.all()
+    subjects_list = []
+    for s in subject_records:
+        s_id = s['id']
+        s_name = clean_value(s['fields'].get('Назва предмета'))
+        if s_name:
+            subjects_list.append((s_id, s_name))
+            
+    return render_template('teacher.html', grades=all_grades, subjects=subjects_list)
 
 @app.route('/add_grade', methods=['GET', 'POST'])
 def add_grade():
@@ -108,23 +115,15 @@ def add_grade():
         return redirect(url_for('teacher_dashboard'))
     
     student_email = request.form.get('student_email')
-    subject_name = request.form.get('subject')  # Текст, наприклад "Математика"
+    subject_id = request.form.get('subject_id')  # Тепер отримуємо прямо Record ID
     grade = request.form.get('grade')
     
-    if student_email and subject_name and grade:
-        # Шукаємо Record ID предмета за його назвою в таблиці "Предмети"
-        # Переконайтеся, що колонка в таблиці "Предмети" називається 'Назва' або 'Предмет'
-        subject_records = subjects_table.all(formula=f"{{Назва предмета}} = '{subject_name}'")
-        
-        if subject_records:
-            subject_id = subject_records[0]['id']
-            
-            # Записуємо оцінку, передаючи ID у вигляді списку [subject_id]
-            grades_table.create({
-                'Email учня': student_email,
-                'Предмет': [subject_id],
-                'Оцінка': int(grade)
-            })
+    if student_email and subject_id and grade:
+        grades_table.create({
+            'Email учня': student_email,
+            'Предмет': [subject_id],  # Записуємо Record ID у вигляді списку
+            'Оцінка': int(grade)
+        })
         
     return redirect(url_for('teacher_dashboard'))
 
