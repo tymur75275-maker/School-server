@@ -13,6 +13,7 @@ AIRTABLE_BASE_ID = os.environ.get('AIRTABLE_BASE_ID')
 api = Api(AIRTABLE_API_KEY)
 grades_table = api.table(AIRTABLE_BASE_ID, 'Оцінки')
 users_table = api.table(AIRTABLE_BASE_ID, 'Users')
+subjects_table = api.table(AIRTABLE_BASE_ID, 'Предмети')
 
 def clean_value(val):
     """Якщо значення прийшло як список ['...'], витягуємо перший елемент"""
@@ -103,20 +104,27 @@ def add_grade():
     if session.get('role') != 'teacher':
         return redirect(url_for('login'))
     
-    # Якщо хтось випадково відкрив сторінку через браузер (GET-запит)
     if request.method == 'GET':
         return redirect(url_for('teacher_dashboard'))
     
     student_email = request.form.get('student_email')
-    subject = request.form.get('subject')
+    subject_name = request.form.get('subject')  # Текст, наприклад "Математика"
     grade = request.form.get('grade')
     
-    if student_email and subject and grade:
-        grades_table.create({
-            'Email учня': student_email,
-            'Предмет': subject,
-            'Оцінка': int(grade)
-        })
+    if student_email and subject_name and grade:
+        # Шукаємо Record ID предмета за його назвою в таблиці "Предмети"
+        # Переконайтеся, що колонка в таблиці "Предмети" називається 'Назва' або 'Предмет'
+        subject_records = subjects_table.all(formula=f"{{Назва}} = '{subject_name}'")
+        
+        if subject_records:
+            subject_id = subject_records[0]['id']
+            
+            # Записуємо оцінку, передаючи ID у вигляді списку [subject_id]
+            grades_table.create({
+                'Email учня': student_email,
+                'Предмет': [subject_id],
+                'Оцінка': int(grade)
+            })
         
     return redirect(url_for('teacher_dashboard'))
 
