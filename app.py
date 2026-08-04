@@ -13,12 +13,12 @@ AIRTABLE_BASE_ID = os.environ.get('AIRTABLE_BASE_ID')
 api = Api(AIRTABLE_API_KEY)
 grades_table = api.table(AIRTABLE_BASE_ID, 'Оцінки')
 
-@app.route('/')
 def clean_value(val):
     """Якщо значення прийшло як список ['...'], витягуємо перший елемент"""
     if isinstance(val, list) and len(val) > 0:
         return val[0]
     return val if val is not None else ''
+@app.route('/')
 def home():
     if 'user' in session:
         if session['role'] == 'teacher':
