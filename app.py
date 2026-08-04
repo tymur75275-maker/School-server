@@ -70,10 +70,12 @@ def student_dashboard():
     student_grades = []
     for record in records:
         fields = record['fields']
-        # Очищаємо від списків ['...']
-        subject = clean_value(fields.get('Назва предмета'))
+        subject = clean_value(fields.get('Назва предмета'))  # Або 'Предмет', якщо берете Lookup
         grade = clean_value(fields.get('Оцінка'))
-        student_grades.append((subject, grade))
+        comment = clean_value(fields.get('Коментар вчителя'))
+        date = clean_value(fields.get('Дата виставлення оцінки'))
+        
+        student_grades.append((subject, grade, date, comment))
     
     return render_template('student.html', grades=student_grades, email=session['user'])
 
