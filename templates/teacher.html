@@ -52,10 +52,15 @@
                     </h4>
                     <form action="{{ url_for('add_grade') }}" method="POST">
                         
-                        <!-- Email учня -->
+                        <!-- Вибір учня зі списку -->
                         <div class="mb-3">
-                            <label for="student_email" class="form-label text-secondary fw-semibold">Email учня</label>
-                            <input type="email" class="form-control" id="student_email" name="student_email" placeholder="student@example.com" required>
+                            <label for="student_id" class="form-label text-secondary fw-semibold">Оберіть учня</label>
+                            <select class="form-select" id="student_id" name="student_id" required>
+                                <option value="" selected disabled>Оберіть учня...</option>
+                                {% for st_id, st_name in students %}
+                                    <option value="{{ st_id }}">{{ st_name }}</option>
+                                {% endfor %}
+                            </select>
                         </div>
 
                         <!-- Вибір предмета зі списку -->
