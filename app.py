@@ -114,7 +114,7 @@ def add_grade():
     if student_email and subject_name and grade:
         # Шукаємо Record ID предмета за його назвою в таблиці "Предмети"
         # Переконайтеся, що колонка в таблиці "Предмети" називається 'Назва' або 'Предмет'
-        subject_records = subjects_table.all(formula=f"{{Назва}} = '{subject_name}'")
+        subject_records = subjects_table.all(formula=f"{{Назва предмета}} = '{subject_name}'")
         
         if subject_records:
             subject_id = subject_records[0]['id']
