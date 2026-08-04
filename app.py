@@ -19,6 +19,7 @@ def clean_value(val):
     if isinstance(val, list) and len(val) > 0:
         return val[0]
     return val if val is not None else ''
+
 @app.route('/')
 def home():
     if 'user' in session:
