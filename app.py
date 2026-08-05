@@ -125,22 +125,47 @@ def add_grade():
         return redirect(url_for('teacher_dashboard'))
     
     try:
-        student_id = request.form.get('student_id')
         subject_id = request.form.get('subject_id')
-        grade = request.form.get('grade')
+        student_ids = request.form.getlist('student_ids[]')
         
-        if student_id and subject_id and grade:
-            # Створюємо запис в Airtable, передаючи ID учня та ID предмета
-            grades_table.create({
-                'Учень': [student_id],
+        if not subject_id or not student_ids:
+            return redirect(url_for('teacher_dashboard'))
+
+        records_to_create = []
+
+        # Проходимо по кожному учню з форми
+        for st_id in student_ids:
+            status = request.form.get(f'status_{st_id}', 'Присутній')
+            grade_val = request.form.get(f'grade_{st_id}', '').strip()
+            comment_val = request.form.get(f'comment_{st_id}', '').strip()
+
+            # Валідація: якщо Присутній — оцінка обов'язкова
+            if status == 'Присутній' and not grade_val:
+                return f"<h3>Помилка: Для всіх присутніх учнів обов'язково має бути виставлена оцінка!</h3><br><a href='/teacher'>Повернутися назад</a>", 400
+
+            # Формуємо запис для Airtable
+            payload = {
+                'Учень': [st_id],
                 'Предмет': [subject_id],
-                'Оцінка': int(grade)
-            })
-            
+                'Статус': status
+            }
+
+            if grade_val:
+                payload['Оцінка'] = int(grade_val)
+            if comment_val:
+                payload['Коментар вчителя'] = comment_val
+
+            records_to_create.append(payload)
+
+        # Масове створення записів у Airtable
+        if records_to_create:
+            grades_table.batch_create(records_to_create)
+
         return redirect(url_for('teacher_dashboard'))
 
     except Exception as e:
         return f"<h3>Виникла помилка під час збереження:</h3><pre>{str(e)}</pre><br><a href='/teacher'>Повернутися назад</a>", 500
+
 @app.route('/logout')
 def logout():
     session.clear()
