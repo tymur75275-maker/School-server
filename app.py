@@ -144,13 +144,11 @@ def add_grade():
                 return f"<h3>Помилка: Для всіх присутніх учнів обов'язково має бути виставлена оцінка!</h3><br><a href='/teacher'>Повернутися назад</a>", 400
 
             
-            # Формуємо запис для Airtable
             payload = {
-                'Учень': st_id,          # ПРИБРАЛИ КВАДРАТНІ ДУЖКИ []
-                'Предмет': subject_id,    # ПРИБРАЛИ КВАДРАТНІ ДУЖКИ []
-                'Статус': status
+                'Учень': str(st_id),
+                'Предмет': str(subject_id),
+                'Статус': str(status)
             }
-
             if grade_val:
                 payload['Оцінка'] = int(grade_val)
             if comment_val:
