@@ -45,10 +45,10 @@
                         </select>
                     </div>
 
-                   <div class="col-md-4">
+                    <div class="col-md-4">
                         <div class="dropdown">
                             <button class="btn btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center" type="button" id="classFilterDropdown" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
-                                <span>Filter by Classes</span>
+                                <span>Фільтр за класами</span>
                             </button>
                             <ul class="dropdown-menu p-2 w-100" aria-labelledby="classFilterDropdown">
                                 <li><label class="dropdown-item rounded"><input type="checkbox" class="form-check-input me-2 class-filter" value="all" checked> Усі класи</label></li>
@@ -79,12 +79,14 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for st_id, st_name in students %}
-                            <tr>
+                            {% for student in students %}
+                            <!-- Підтримує як кортеж (st_id, st_name, st_class), так і об'єкт/словник -->
+                            <tr class="student-row" data-class="{{ student[2] if student|length > 2 else student.class_name|default('') }}">
                                 <td>
-                                    <input type="hidden" name="student_ids[]" value="{{ st_id }}">
+                                    <input type="hidden" name="student_ids[]" value="{{ student[0] if student is iterable and student is not string else student.id }}">
                                     <!-- 4 кнопки статусів -->
                                     <div class="btn-group btn-status-group w-100" role="group">
+                                        {% set st_id = student[0] if student is iterable and student is not string else student.id %}
                                         <input type="radio" class="btn-check status-radio" name="status_{{ st_id }}" id="pres_{{ st_id }}" value="Присутній" checked data-studentid="{{ st_id }}">
                                         <label class="btn btn-outline-success" for="pres_{{ st_id }}">Присутній</label>
 
@@ -98,7 +100,7 @@
                                         <label class="btn btn-outline-warning" for="ret_{{ st_id }}">Перездача</label>
                                     </div>
                                 </td>
-                                <td class="fw-semibold text-dark">{{ st_name }}</td>
+                                <td class="fw-semibold text-dark">{{ student[1] if student is iterable and student is not string else student.name }}</td>
                                 <td>
                                     <input type="number" class="form-control grade-input" id="grade_input_{{ st_id }}" name="grade_{{ st_id }}" min="1" max="12" placeholder="1-12">
                                 </td>
@@ -155,6 +157,7 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/bootstrap.bundle.min.js"></script>
     <script>
         document.addEventListener('DOMContentLoaded', function() {
+            // 1. Блокування/розблокування поля оцінки залежно від статусу відвідуваності
             const statusRadios = document.querySelectorAll('.status-radio');
 
             function toggleGradeInput(radio) {
@@ -182,6 +185,47 @@
                 });
             });
 
+            // 2. Фільтрація рядків таблиці за класами
+            const classFilters = document.querySelectorAll('.class-filter');
+            const studentRows = document.querySelectorAll('.student-row');
+
+            function filterStudents() {
+                const allCheckbox = document.querySelector('.class-filter[value="all"]');
+                const selectedClasses = Array.from(classFilters)
+                    .filter(cb => cb.checked && cb.value !== 'all')
+                    .map(cb => cb.value);
+
+                studentRows.forEach(row => {
+                    const studentClass = String(row.dataset.class || '').trim();
+                    if (allCheckbox.checked || selectedClasses.length === 0 || selectedClasses.includes(studentClass)) {
+                        row.style.display = '';
+                    } else {
+                        row.style.display = 'none';
+                    }
+                });
+            }
+
+            classFilters.forEach(filter => {
+                filter.addEventListener('change', function() {
+                    const allCheckbox = document.querySelector('.class-filter[value="all"]');
+                    
+                    if (this.value === 'all' && this.checked) {
+                        classFilters.forEach(cb => { if (cb.value !== 'all') cb.checked = false; });
+                    } else if (this.value !== 'all' && this.checked) {
+                        allCheckbox.checked = false;
+                    }
+
+                    // Якщо всі інші зняті — повертаємо "Усі класи"
+                    const anyChecked = Array.from(classFilters).some(cb => cb.checked);
+                    if (!anyChecked) {
+                        allCheckbox.checked = true;
+                    }
+
+                    filterStudents();
+                });
+            });
+
+            // 3. Валідація перед відправкою форми
             document.getElementById('gradesForm').addEventListener('submit', function(e) {
                 const studentIds = document.querySelectorAll('input[name="student_ids[]"]');
                 let hasError = false;
@@ -190,16 +234,20 @@
                     const stId = input.value;
                     const statusRadio = document.querySelector(`input[name="status_${stId}"]:checked`);
                     const gradeInput = document.getElementById(`grade_input_${stId}`);
+                    const row = input.closest('tr');
 
-                    if (statusRadio && statusRadio.value === 'Присутній') {
-                        if (!gradeInput.value.trim()) {
-                            gradeInput.classList.add('is-invalid');
-                            hasError = true;
+                    // Перевіряємо тільки видимі рядки
+                    if (row && row.style.display !== 'none') {
+                        if (statusRadio && statusRadio.value === 'Присутній') {
+                            if (!gradeInput.value.trim()) {
+                                gradeInput.classList.add('is-invalid');
+                                hasError = true;
+                            } else {
+                                gradeInput.classList.remove('is-invalid');
+                            }
                         } else {
                             gradeInput.classList.remove('is-invalid');
                         }
-                    } else {
-                        gradeInput.classList.remove('is-invalid');
                     }
                 });
 
