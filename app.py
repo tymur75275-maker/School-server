@@ -72,7 +72,7 @@ def student_dashboard():
     student_grades = []
     for record in records:
         fields = record['fields']
-        subject = clean_value(fields.get('Назва предмета'))
+        subject = clean_value(fields.get('Назва предмета')) or clean_value(fields.get('Предмет'))
         grade = clean_value(fields.get('Оцінка'))
         comment = clean_value(fields.get('Коментар вчителя'))
         date = clean_value(fields.get('Дата виставлення оцінки'))
@@ -91,8 +91,10 @@ def teacher_dashboard():
     all_grades = []
     for record in records:
         fields = record['fields']
-        student = clean_value(fields.get('Email учня'))
-        subject = clean_value(fields.get('Назва предмета'))
+        # Якщо використовується Lookup для імені учня/предмета, зчитає його значення,
+        # інакше зчитає первинне значення з зв'язаного поля
+        student = clean_value(fields.get("Ім'я учня")) or clean_value(fields.get('Учень'))
+        subject = clean_value(fields.get('Назва предмета')) or clean_value(fields.get('Предмет'))
         grade = clean_value(fields.get('Оцінка'))
         all_grades.append((student, subject, grade))
     
@@ -132,10 +134,6 @@ def add_grade():
         if not subject_id or not student_ids:
             return redirect(url_for('teacher_dashboard'))
 
-        # Отримуємо назву предмета за його ID (для Single Select)
-        subject_rec = subjects_table.get(subject_id)
-        subject_name = clean_value(subject_rec['fields'].get('Назва предмета'))
-
         records_to_create = []
 
         # Проходимо по кожному учню з форми
@@ -148,13 +146,10 @@ def add_grade():
             if status == 'Присутній' and not grade_val:
                 return f"<h3>Помилка: Для всіх присутніх учнів обов'язково має бути виставлена оцінка!</h3><br><a href='/teacher'>Повернутися назад</a>", 400
 
-            # Отримуємо текстове ім'я учня за його ID (для Single Select)
-            student_rec = students_table.get(st_id)
-            student_name = clean_value(student_rec['fields'].get("Ім'я учня"))
-
+            # Оскільки 'Учень' та 'Предмет' — це Link to another record, передаємо ID у масиві [id]
             payload = {
-                'Учень': str(student_name),
-                'Предмет': str(subject_name),
+                'Учень': [st_id],
+                'Предмет': [subject_id],
                 'Статус': str(status)
             }
 
