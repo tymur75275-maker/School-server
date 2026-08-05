@@ -14,7 +14,7 @@ api = Api(AIRTABLE_API_KEY)
 grades_table = api.table(AIRTABLE_BASE_ID, 'Оцінки')
 users_table = api.table(AIRTABLE_BASE_ID, 'Users')
 subjects_table = api.table(AIRTABLE_BASE_ID, 'Предмети')
-students_table = api.table(AIRTABLE_BASE_ID, 'Учні') # або 'Users', залежно від того, де лежать email учнів
+students_table = api.table(AIRTABLE_BASE_ID, 'Учні')
 
 def clean_value(val):
     """Якщо значення прийшло як список ['...'], витягуємо перший елемент"""
@@ -72,7 +72,7 @@ def student_dashboard():
     student_grades = []
     for record in records:
         fields = record['fields']
-        subject = clean_value(fields.get('Назва предмета'))  # Або 'Предмет', якщо берете Lookup
+        subject = clean_value(fields.get('Назва предмета'))
         grade = clean_value(fields.get('Оцінка'))
         comment = clean_value(fields.get('Коментар вчителя'))
         date = clean_value(fields.get('Дата виставлення оцінки'))
@@ -105,14 +105,15 @@ def teacher_dashboard():
         if s_name:
             subjects_list.append((s_id, s_name))
 
-    # 3. Отримуємо список учнів (ID та Ім'я учня)
+    # 3. Отримуємо список учнів (ID, Ім'я учня та Клас)
     student_records = students_table.all()
     students_list = []
     for st in student_records:
         st_id = st['id']
         st_name = clean_value(st['fields'].get("Ім'я учня"))
+        st_class = clean_value(st['fields'].get("Клас"))
         if st_name:
-            students_list.append((st_id, st_name))
+            students_list.append((st_id, st_name, st_class))
             
     return render_template('teacher.html', grades=all_grades, subjects=subjects_list, students=students_list)
 
@@ -131,6 +132,10 @@ def add_grade():
         if not subject_id or not student_ids:
             return redirect(url_for('teacher_dashboard'))
 
+        # Отримуємо назву предмета за його ID (для Single Select)
+        subject_rec = subjects_table.get(subject_id)
+        subject_name = clean_value(subject_rec['fields'].get('Назва предмета'))
+
         records_to_create = []
 
         # Проходимо по кожному учню з форми
@@ -143,12 +148,16 @@ def add_grade():
             if status == 'Присутній' and not grade_val:
                 return f"<h3>Помилка: Для всіх присутніх учнів обов'язково має бути виставлена оцінка!</h3><br><a href='/teacher'>Повернутися назад</a>", 400
 
-            
+            # Отримуємо текстове ім'я учня за його ID (для Single Select)
+            student_rec = students_table.get(st_id)
+            student_name = clean_value(student_rec['fields'].get("Ім'я учня"))
+
             payload = {
-                'Учень': str(st_id),
-                'Предмет': str(subject_id),
+                'Учень': str(student_name),
+                'Предмет': str(subject_name),
                 'Статус': str(status)
             }
+
             if grade_val:
                 payload['Оцінка'] = int(grade_val)
             if comment_val:
