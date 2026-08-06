@@ -5,7 +5,7 @@ from pyairtable import Api
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "super-secret-key-12345")
 
-# Зчитуємо ключі з змінних оточення (або значення за замовчуванням, якщо вони не задані)
+# Зчитуємо ключі з змінних оточення (або значення за замовчуванням)
 AIRTABLE_API_KEY = os.environ.get("AIRTABLE_API_KEY")
 AIRTABLE_BASE_ID = os.environ.get("AIRTABLE_BASE_ID")
 
@@ -34,9 +34,9 @@ def login():
         for u in all_users:
             fields = u.get('fields', {})
             
-            # Надійно отримуємо значення email та пароля з Airtable
-            raw_email = fields.get('Email') or fields.get('email') or ''
-            raw_pass = fields.get('Пароль') or fields.get('пароль') or fields.get('Password') or ''
+            # Очищаємо значення від списків та пробілів
+            raw_email = clean_val(fields.get('Email') or fields.get('email'))
+            raw_pass = clean_val(fields.get('Пароль') or fields.get('пароль') or fields.get('Password'))
 
             u_email = str(raw_email).strip().lower()
             u_pass = str(raw_pass).strip()
@@ -46,11 +46,14 @@ def login():
                 break
 
         if user_match:
-            session['user_email'] = email
-            session['user_role'] = user_match.get('Роль')
-            session['user_name'] = user_match.get('ПІБ') or email
+            role = str(clean_val(user_match.get('Роль'))).strip()
+            name = str(clean_val(user_match.get('ПІБ'))).strip() or email
 
-            if session['user_role'] == 'Вчитель':
+            session['user_email'] = email
+            session['user_role'] = role
+            session['user_name'] = name
+
+            if role == 'Вчитель':
                 return redirect(url_for('teacher_dashboard'))
             else:
                 return redirect(url_for('student_dashboard'))
@@ -66,7 +69,7 @@ def logout():
 
 @app.route('/teacher', methods=['GET', 'POST'])
 def teacher_dashboard():
-    if session.get('user_role') != 'Вчитель':
+    if str(session.get('user_role', '')).strip() != 'Вчитель':
         return redirect(url_for('login'))
 
     subjects = subjects_table.all()
@@ -124,7 +127,7 @@ def teacher_dashboard():
     grid_data = {}
     for st in students:
         st_id = st['id']
-        st_name = st['fields'].get('ПІБ') or st['fields'].get('Ім\'я') or 'Учень'
+        st_name = clean_val(st['fields'].get('ПІБ')) or clean_val(st['fields'].get('Ім\'я')) or 'Учень'
         grid_data[st_id] = {
             'name': st_name,
             'grades': {}
@@ -152,7 +155,7 @@ def teacher_dashboard():
 
 @app.route('/student')
 def student_dashboard():
-    if session.get('user_role') != 'Учень':
+    if str(session.get('user_role', '')).strip() != 'Учень':
         return redirect(url_for('login'))
 
     user_email = session.get('user_email')
@@ -161,7 +164,8 @@ def student_dashboard():
 
     for st in all_students:
         f = st.get('fields', {})
-        if str(f.get('Email', '')).strip().lower() == user_email:
+        st_email = str(clean_val(f.get('Email'))).strip().lower()
+        if st_email == user_email:
             current_student = st
             break
 
@@ -170,7 +174,7 @@ def student_dashboard():
         return redirect(url_for('login'))
 
     st_id = current_student['id']
-    st_name = current_student['fields'].get('ПІБ') or session.get('user_name')
+    st_name = clean_val(current_student['fields'].get('ПІБ')) or session.get('user_name')
 
     all_grades = grades_table.all()
     all_subjects = subjects_table.all()
