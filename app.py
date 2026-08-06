@@ -5,6 +5,7 @@ from pyairtable import Api
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "super-secret-key-12345")
 
+# Зчитуємо секрети з Environment Variables
 AIRTABLE_API_KEY = os.environ.get("AIRTABLE_API_KEY")
 AIRTABLE_BASE_ID = os.environ.get("AIRTABLE_BASE_ID")
 
@@ -21,6 +22,7 @@ def clean_val(val):
     return val or ""
 
 @app.route('/', methods=['GET', 'POST'])
+@app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
         email = request.form.get('email', '').strip().lower()
