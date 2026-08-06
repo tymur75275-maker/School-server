@@ -5,7 +5,7 @@ from pyairtable import Api
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "super-secret-key-12345")
 
-# Зчитуємо секрети з Environment Variables
+# Зчитуємо ключі з змінних оточення (або значення за замовчуванням, якщо вони не задані)
 AIRTABLE_API_KEY = os.environ.get("AIRTABLE_API_KEY")
 AIRTABLE_BASE_ID = os.environ.get("AIRTABLE_BASE_ID")
 
@@ -26,15 +26,20 @@ def clean_val(val):
 def login():
     if request.method == 'POST':
         email = request.form.get('email', '').strip().lower()
-        password = request.form.get('password', '').strip()
+        password = str(request.form.get('password', '')).strip()
 
         all_users = users_table.all()
         user_match = None
 
         for u in all_users:
             fields = u.get('fields', {})
-            u_email = str(fields.get('Email', '')).strip().lower()
-            u_pass = str(fields.get('Пароль', '')).strip()
+            
+            # Надійно отримуємо значення email та пароля з Airtable
+            raw_email = fields.get('Email') or fields.get('email') or ''
+            raw_pass = fields.get('Пароль') or fields.get('пароль') or fields.get('Password') or ''
+
+            u_email = str(raw_email).strip().lower()
+            u_pass = str(raw_pass).strip()
 
             if u_email == email and u_pass == password:
                 user_match = fields
@@ -102,7 +107,6 @@ def teacher_dashboard():
 
     all_grades = grades_table.all()
     
-    # Фільтруємо за обраним предметом
     subject_grades = []
     active_dates = set()
 
@@ -117,7 +121,6 @@ def teacher_dashboard():
 
     sorted_dates = sorted(list(active_dates))
 
-    # Створюємо матрицю: [student_id][date] = {grade, status, comment, topic}
     grid_data = {}
     for st in students:
         st_id = st['id']
@@ -187,7 +190,6 @@ def student_dashboard():
 
     sorted_dates = sorted(list(active_dates))
 
-    # Створюємо матрицю учня: [subject_name][date] = {grade, status, comment, topic}
     grid_data = {subj: {} for subj in subject_names}
 
     for g in student_grades:
