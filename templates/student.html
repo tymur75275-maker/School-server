@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Кабінет Учня</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f4f6f9;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .navbar {
+            background: linear-gradient(135deg, #0d6efd, #0b5ed7);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+        .card {
+            border: none;
+            border-radius: 12px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+        }
+        .table {
+            vertical-align: middle;
+        }
+        .grade-badge {
+            font-size: 1rem;
+            font-weight: 600;
+            padding: 6px 14px;
+            border-radius: 20px;
+        }
+        .comment-text {
+            color: #6c757d;
+            font-size: 0.9rem;
+            font-style: italic;
+        }
+        .date-text {
+            color: #8c98a4;
+            font-size: 0.85rem;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Шапка (Header) -->
+    <nav class="navbar navbar-dark mb-4 py-3">
+        <div class="container">
+            <span class="navbar-brand mb-0 h1">
+                <i class="fa-solid fa-graduation-cap me-2"></i>Кабінет Учня
+            </span>
+            <div class="d-flex align-items-center gap-3">
+                <span class="text-white-50 d-none d-md-inline">{{ email }}</span>
+                <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm rounded-pill px-3">
+                    <i class="fa-solid fa-right-from-bracket me-1"></i> Вийти
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Основний контент -->
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="card p-4 mb-5">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h3 class="fw-bold text-dark mb-0">Успішність та Оцінки</h3>
+                        <span class="badge bg-light text-dark border px-3 py-2 rounded-pill">
+                            Усього записів: {{ grades|length }}
+                        </span>
+                    </div>
+
+                    {% if grades %}
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th scope="col" style="width: 25%;">Предмет</th>
+                                    <th scope="col" class="text-center" style="width: 15%;">Оцінка</th>
+                                    <th scope="col" style="width: 20%;">Дата</th>
+                                    <th scope="col" style="width: 40%;">Коментар вчителя</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for subject, grade, date, comment in grades %}
+                                <tr>
+                                    <!-- Предмет -->
+                                    <td class="fw-semibold text-dark">
+                                        {{ subject if subject else '—' }}
+                                    </td>
+
+                                    <!-- Оцінка -->
+                                    <td class="text-center">
+                                        {% if grade %}
+                                            {% set g = grade|int %}
+                                            {% if g >= 10 %}
+                                                <span class="badge bg-success grade-badge">{{ grade }}</span>
+                                            {% elif g >= 7 %}
+                                                <span class="badge bg-primary grade-badge">{{ grade }}</span>
+                                            {% elif g >= 4 %}
+                                                <span class="badge bg-warning text-dark grade-badge">{{ grade }}</span>
+                                            {% else %}
+                                                <span class="badge bg-danger grade-badge">{{ grade }}</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted">—</span>
+                                        {% endif %}
+                                    </td>
+
+                                    <!-- Дата -->
+                                    <td>
+                                        <span class="date-text">
+                                            <i class="fa-regular fa-calendar me-1"></i>
+                                            {{ date if date else '—' }}
+                                        </span>
+                                    </td>
+
+                                    <!-- Коментар -->
+                                    <td>
+                                        {% if comment %}
+                                            <span class="comment-text">
+                                                <i class="fa-regular fa-comment-dots me-1"></i>
+                                                {{ comment }}
+                                            </span>
+                                        {% else %}
+                                            <span class="text-muted small">Немає коментаря</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fa-regular fa-folder-open text-muted fa-3x mb-3"></i>
+                        <p class="text-muted fs-5">Оцінок поки немає.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>
