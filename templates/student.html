@@ -65,27 +65,38 @@
 
         <h3>Мої оцінки</h3>
 
-        {% if grades %}
-            <table>
-                <thead>
-                    <tr>
-                        <th>Предмет</th>
-                        <th>Оцінка</th>
-                        <th>Дата</th>
-                        <th>Коментар вчителя</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for subject, grade, date, comment in grades %}
+       {% if matrix and dates %}
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
                         <tr>
-                            <td>{{ subject if subject else '—' }}</td>
-                            <td><span class="grade-badge">{{ grade if grade else '—' }}</span></td>
-                            <td>{{ date if date else '—' }}</td>
-                            <td>{{ comment if comment else '—' }}</td>
+                            <th>Предмет / Дата</th>
+                            {% for dt in dates %}
+                                <th>{{ dt }}</th>
+                            {% endfor %}
                         </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        {% for subj in subjects %}
+                            <tr>
+                                <td><strong>{{ subj }}</strong></td>
+                                {% for dt in dates %}
+                                    {% set item = matrix[subj][dt] %}
+                                    <td style="text-align: center;">
+                                        {% if item %}
+                                            <span class="grade-badge" title="{{ item.comment if item.comment else '' }}">
+                                                {{ item.grade if item.grade else item.status }}
+                                            </span>
+                                        {% else %}
+                                            <span style="color: #ccc;">—</span>
+                                        {% endif %}
+                                    </td>
+                                {% endfor %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         {% else %}
             <p>Наразі у вас немає виставлених оцінок.</p>
         {% endif %}
