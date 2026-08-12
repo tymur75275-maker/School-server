@@ -3,143 +3,94 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Кабінет Учня</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <title>Вхід у систему</title>
     <style>
         body {
+            font-family: Arial, sans-serif;
             background-color: #f4f6f9;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
         }
-        .navbar {
-            background: linear-gradient(135deg, #0d6efd, #0b5ed7);
-            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        .login-card {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 380px;
         }
-        .card {
+        .login-card h2 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            text-align: center;
+            color: #333;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #555;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        .login-btn {
+            width: 100%;
+            padding: 10px;
+            background-color: #007bff;
             border: none;
-            border-radius: 12px;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+            color: white;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
         }
-        .table {
-            vertical-align: middle;
+        .login-btn:hover {
+            background-color: #0056b3;
         }
-        .grade-badge {
-            font-size: 1rem;
-            font-weight: 600;
-            padding: 6px 14px;
-            border-radius: 20px;
-        }
-        .comment-text {
-            color: #6c757d;
-            font-size: 0.9rem;
-            font-style: italic;
-        }
-        .date-text {
-            color: #8c98a4;
-            font-size: 0.85rem;
+        .error-message {
+            background-color: #f8d7da;
+            color: #721c24;
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            text-align: center;
         }
     </style>
 </head>
 <body>
+    <div class="login-card">
+        <h2>Авторизація</h2>
 
-    <!-- Шапка (Header) -->
-    <nav class="navbar navbar-dark mb-4 py-3">
-        <div class="container">
-            <span class="navbar-brand mb-0 h1">
-                <i class="fa-solid fa-graduation-cap me-2"></i>Кабінет Учня
-            </span>
-            <div class="d-flex align-items-center gap-3">
-                <span class="text-white-50 d-none d-md-inline">{{ email }}</span>
-                <a href="{{ url_for('logout') }}" class="btn btn-outline-light btn-sm rounded-pill px-3">
-                    <i class="fa-solid fa-right-from-bracket me-1"></i> Вийти
-                </a>
+        {% if error %}
+            <div class="error-message">{{ error }}</div>
+        {% endif %}
+
+        <form action="{{ url_for('login') }}" method="POST">
+            <div class="form-group">
+                <label for="email">Email:</label>
+                <input type="email" id="email" name="email" required placeholder="example@mail.com">
             </div>
-        </div>
-    </nav>
 
-    <!-- Основний контент -->
-    <div class="container">
-        <div class="row justify-content-center">
-            <div class="col-lg-10">
-                <div class="card p-4 mb-5">
-                    <div class="d-flex justify-content-between align-items-center mb-4">
-                        <h3 class="fw-bold text-dark mb-0">Успішність та Оцінки</h3>
-                        <span class="badge bg-light text-dark border px-3 py-2 rounded-pill">
-                            Усього записів: {{ grades|length }}
-                        </span>
-                    </div>
-
-                    {% if grades %}
-                    <div class="table-responsive">
-                        <table class="table table-hover align-middle mb-0">
-                            <thead class="table-light">
-                                <tr>
-                                    <th scope="col" style="width: 25%;">Предмет</th>
-                                    <th scope="col" class="text-center" style="width: 15%;">Оцінка</th>
-                                    <th scope="col" style="width: 20%;">Дата</th>
-                                    <th scope="col" style="width: 40%;">Коментар вчителя</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for subject, grade, date, comment in grades %}
-                                <tr>
-                                    <!-- Предмет -->
-                                    <td class="fw-semibold text-dark">
-                                        {{ subject if subject else '—' }}
-                                    </td>
-
-                                    <!-- Оцінка -->
-                                    <td class="text-center">
-                                        {% if grade %}
-                                            {% set g = grade|int %}
-                                            {% if g >= 10 %}
-                                                <span class="badge bg-success grade-badge">{{ grade }}</span>
-                                            {% elif g >= 7 %}
-                                                <span class="badge bg-primary grade-badge">{{ grade }}</span>
-                                            {% elif g >= 4 %}
-                                                <span class="badge bg-warning text-dark grade-badge">{{ grade }}</span>
-                                            {% else %}
-                                                <span class="badge bg-danger grade-badge">{{ grade }}</span>
-                                            {% endif %}
-                                        {% else %}
-                                            <span class="text-muted">—</span>
-                                        {% endif %}
-                                    </td>
-
-                                    <!-- Дата -->
-                                    <td>
-                                        <span class="date-text">
-                                            <i class="fa-regular fa-calendar me-1"></i>
-                                            {{ date if date else '—' }}
-                                        </span>
-                                    </td>
-
-                                    <!-- Коментар -->
-                                    <td>
-                                        {% if comment %}
-                                            <span class="comment-text">
-                                                <i class="fa-regular fa-comment-dots me-1"></i>
-                                                {{ comment }}
-                                            </span>
-                                        {% else %}
-                                            <span class="text-muted small">Немає коментаря</span>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                    {% else %}
-                    <div class="text-center py-5">
-                        <i class="fa-regular fa-folder-open text-muted fa-3x mb-3"></i>
-                        <p class="text-muted fs-5">Оцінок поки немає.</p>
-                    </div>
-                    {% endif %}
-                </div>
+            <div class="form-group">
+                <label for="password">Пароль:</label>
+                <input type="password" id="password" name="password" required placeholder="Введіть пароль">
             </div>
-        </div>
+
+            <button type="submit" class="login-btn">Увійти</button>
+        </form>
     </div>
-
 </body>
 </html>
