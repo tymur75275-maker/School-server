@@ -66,39 +66,79 @@ def student_dashboard():
     if session.get('role') != 'student':
         return redirect(url_for('login'))
     
-    # Витягуємо оцінки поточного учня з Airtable за його Email
+    # Отримуємо всі оцінки поточного учня
     records = grades_table.all(formula=f"{{Email учня}} = '{session['user']}'")
     
-    student_grades = []
+    dates_set = set()
+    subjects_set = set()
+    raw_grades = []
+
     for record in records:
         fields = record['fields']
         subject = clean_value(fields.get('Назва предмета')) or clean_value(fields.get('Предмет'))
         grade = clean_value(fields.get('Оцінка'))
         comment = clean_value(fields.get('Коментар вчителя'))
-        date = clean_value(fields.get('Дата виставлення оцінки'))
-        
-        student_grades.append((subject, grade, date, comment))
-    
-    return render_template('student.html', grades=student_grades, email=session['user'])
+        date = clean_value(fields.get('Дата виставлення оцінки')) or clean_value(fields.get('Дата'))
+        status = clean_value(fields.get('Статус'))
+
+        if subject and date:
+            subjects_set.add(subject)
+            dates_set.add(date)
+            raw_grades.append({
+                'subject': subject,
+                'date': date,
+                'grade': grade,
+                'status': status,
+                'comment': comment
+            })
+
+    dates_list = sorted(list(dates_set))
+    subjects_list = sorted(list(subjects_set))
+
+    # Створюємо матрицю: matrix[subject][date] = grade_info
+    matrix = {subj: {dt: None for dt in dates_list} for subj in subjects_list}
+    for item in raw_grades:
+        matrix[item['subject']][item['date']] = item
+
+    return render_template('student.html', 
+                           subjects=subjects_list, 
+                           dates=dates_list, 
+                           matrix=matrix, 
+                           email=session['user'])
 
 @app.route('/teacher')
 def teacher_dashboard():
     if session.get('role') != 'teacher':
         return redirect(url_for('login'))
     
-    # 1. Отримуємо всі оцінки для журналу
+    # 1. Отримуємо всі оцінки для матриці
     records = grades_table.all()
-    all_grades = []
+    students_set = set()
+    subjects_set = set()
+    raw_grades = []
+
     for record in records:
         fields = record['fields']
-        # Якщо використовується Lookup для імені учня/предмета, зчитає його значення,
-        # інакше зчитає первинне значення з зв'язаного поля
         student = clean_value(fields.get("Ім'я учня")) or clean_value(fields.get('Учень'))
         subject = clean_value(fields.get('Назва предмета')) or clean_value(fields.get('Предмет'))
         grade = clean_value(fields.get('Оцінка'))
-        all_grades.append((student, subject, grade))
-    
-    # 2. Отримуємо список предметів (ID та Назва предмета)
+        status = clean_value(fields.get('Статус'))
+
+        if student and subject:
+            students_set.add(student)
+            subjects_set.add(subject)
+            raw_grades.append({'student': student, 'subject': subject, 'grade': grade or status})
+
+    students_matrix_list = sorted(list(students_set))
+    subjects_matrix_list = sorted(list(subjects_set))
+
+    # Будуємо матрицю журналу для вчителя: matrix[student][subject] = grade
+    matrix = {st: {subj: [] for subj in subjects_matrix_list} for st in students_matrix_list}
+    for g in raw_grades:
+        if g['grade']:
+            matrix[g['student']][g['subject']].append(str(g['grade']))
+
+    # 2. Список предметов для форми виставлення
     subject_records = subjects_table.all()
     subjects_list = []
     for s in subject_records:
@@ -107,7 +147,7 @@ def teacher_dashboard():
         if s_name:
             subjects_list.append((s_id, s_name))
 
-    # 3. Отримуємо список учнів (ID, Ім'я учня та Клас)
+    # 3. Список учнів для форми виставлення
     student_records = students_table.all()
     students_list = []
     for st in student_records:
@@ -117,8 +157,12 @@ def teacher_dashboard():
         if st_name:
             students_list.append((st_id, st_name, st_class))
             
-    return render_template('teacher.html', grades=all_grades, subjects=subjects_list, students=students_list)
-
+    return render_template('teacher.html', 
+                           matrix=matrix, 
+                           matrix_students=students_matrix_list, 
+                           matrix_subjects=subjects_matrix_list, 
+                           subjects=subjects_list, 
+                           students=students_list)
 @app.route('/add_grade', methods=['GET', 'POST'])
 def add_grade():
     if session.get('role') != 'teacher':
