@@ -32,6 +32,12 @@ def home():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    # Перевірка: якщо користувач ВЖЕ авторизований, редиректимо його геть з логину
+    if 'user' in session:
+        if session.get('role') == 'teacher':
+            return redirect(url_for('teacher_dashboard'))
+        return redirect(url_for('student_dashboard'))
+
     error = None
     if request.method == 'POST':
         email = request.form.get('email', '').strip()
