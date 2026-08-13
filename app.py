@@ -1,6 +1,7 @@
 import os
 from flask import Flask, render_template, request, redirect, url_for, session
 from pyairtable import Api
+from datetime import date
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'default_secret_key_for_dev')
@@ -123,47 +124,68 @@ def teacher_dashboard():
     if session.get('role') != 'teacher':
         return redirect(url_for('login'))
     
-    # 1. Отримуємо всі оцінки для матриці (Учень x Дата)
-    records = grades_table.all()
+    teacher_email = str(session.get('user', '')).strip().lower()
+
+    # 1. Знаходимо всі предмети, які викладає ЦЕЙ вчитель (фільтр за Email у таблиці "Предмети")
+    all_subjects = subjects_table.all()
+    teacher_subjects = []
+    
+    for subj in all_subjects:
+        f = subj['fields']
+        subj_email = str(clean_value(f.get('Email')) or '').strip().lower()
+        if subj_email == teacher_email:
+            teacher_subjects.append({
+                'id': subj['id'],
+                'name': clean_value(f.get('Назва предмета'))
+            })
+
+    # Отримуємо вибраний предмет зі списку (або перший за замовчуванням)
+    selected_subject_id = request.args.get('subject_id')
+    if not selected_subject_id and teacher_subjects:
+        selected_subject_id = teacher_subjects[0]['id']
+
+    selected_subject_name = None
+    for s in teacher_subjects:
+        if s['id'] == selected_subject_id:
+            selected_subject_name = s['name']
+            break
+
+    # 2. Отримуємо оцінки ЛИШЕ для вибраного предмета цього вчителя
+    all_grades = grades_table.all()
     students_set = set()
     dates_set = set()
     raw_grades = []
 
-    for record in records:
-        fields = record['fields']
-        student = clean_value(fields.get("Ім'я учня")) or clean_value(fields.get('Учень'))
-        date = clean_value(fields.get('Дата виставлення оцінки')) or clean_value(fields.get('Дата')) or 'Без дати'
-        grade = clean_value(fields.get('Оцінка'))
-        status = clean_value(fields.get('Статус'))
+    for rec in all_grades:
+        f = rec['fields']
+        subj_name = clean_value(f.get('Предмет')) or clean_value(f.get('Назва предмета'))
+        
+        # Якщо предмет збігається з вибраним предметом вчителя
+        if selected_subject_name and str(subj_name).strip() == str(selected_subject_name).strip():
+            student = clean_value(f.get("Учень")) or clean_value(f.get("Ім'я учня"))
+            dt_val = clean_value(f.get('Дата виставлення оцінки')) or clean_value(f.get('Дата')) or 'Без дати'
+            grade = clean_value(f.get('Оцінка'))
+            status = clean_value(f.get('Статус'))
 
-        if student:
-            students_set.add(str(student))
-            dates_set.add(str(date))
-            raw_grades.append({
-                'student': str(student), 
-                'date': str(date), 
-                'grade': grade or status
-            })
+            if student:
+                students_set.add(str(student))
+                dates_set.add(str(dt_val))
+                raw_grades.append({
+                    'student': str(student),
+                    'date': str(dt_val),
+                    'grade': grade or status
+                })
 
     students_matrix_list = sorted(list(students_set))
     dates_matrix_list = sorted(list(dates_set))
 
-    # Будуємо матрицю журналу: matrix[student][date] = [grades]
+    # Створюємо матрицю журналу: matrix[student][date] = [grades]
     matrix = {st: {dt: [] for dt in dates_matrix_list} for st in students_matrix_list}
     for g in raw_grades:
         if g['grade']:
             matrix[g['student']][g['date']].append(str(g['grade']))
 
-    # 2. Список предметів для форми виставлення
-    subject_records = subjects_table.all()
-    subjects_list = []
-    for s in subject_records:
-        s_id = s['id']
-        s_name = clean_value(s['fields'].get('Назва предмета'))
-        if s_name:
-            subjects_list.append((s_id, s_name))
-
-    # 3. Список учнів для форми виставлення
+    # 3. Список всіх учнів для форми виставлення
     student_records = students_table.all()
     students_list = []
     for st in student_records:
@@ -172,24 +194,29 @@ def teacher_dashboard():
         st_class = clean_value(st['fields'].get("Клас"))
         if st_name:
             students_list.append((st_id, st_name, st_class))
-            
-    return render_template('teacher.html', 
-                           matrix=matrix, 
-                           matrix_students=students_matrix_list, 
-                           matrix_dates=dates_matrix_list, 
-                           subjects=subjects_list, 
-                           students=students_list)
 
-@app.route('/add_grade', methods=['GET', 'POST'])
+    today_str = date.today().isoformat()
+
+    return render_template(
+        'teacher.html',
+        matrix=matrix,
+        matrix_students=students_matrix_list,
+        matrix_dates=dates_matrix_list,
+        teacher_subjects=teacher_subjects,
+        selected_subject_id=selected_subject_id,
+        selected_subject_name=selected_subject_name,
+        students=students_list,
+        today_date=today_str
+    )
+
+@app.route('/add_grade', methods=['POST'])
 def add_grade():
     if session.get('role') != 'teacher':
         return redirect(url_for('login'))
     
-    if request.method == 'GET':
-        return redirect(url_for('teacher_dashboard'))
-    
     try:
         subject_id = request.form.get('subject_id')
+        grade_date = request.form.get('grade_date')
         student_ids = request.form.getlist('student_ids[]')
         
         if not subject_id or not student_ids:
@@ -197,9 +224,7 @@ def add_grade():
 
         records_to_create = []
 
-        # Проходимо по кожному позначеному учню з форми
         for st_id in student_ids:
-            # Перевіряємо, щоб st_id не був порожнім
             if not st_id or str(st_id).strip() == '':
                 continue
 
@@ -207,15 +232,16 @@ def add_grade():
             grade_val = request.form.get(f'grade_{st_id}', '').strip()
             comment_val = request.form.get(f'comment_{st_id}', '').strip()
 
-            # Валідація: якщо Присутній — оцінка обов'язкова
             if status == 'Присутній' and not grade_val:
                 return f"<h3>Помилка: Для всіх присутніх учнів обов'язково має бути виставлена оцінка!</h3><br><a href='/teacher'>Повернутися назад</a>", 400
 
-            # Передаємо саме масиви ID для полів типу 'Link to another record'
+            # Зберігаємо зв'язки Link to Record у вигляді списку ID: [id]
+            # Та дату в полі "Дата виставлення оцінки"
             payload = {
                 'Учень': [st_id],
                 'Предмет': [subject_id],
-                'Статус': str(status)
+                'Статус': str(status),
+                'Дата виставлення оцінки': grade_date
             }
 
             if grade_val:
@@ -225,7 +251,6 @@ def add_grade():
 
             records_to_create.append(payload)
 
-        # Масове створення записів у Airtable
         if records_to_create:
             grades_table.batch_create(records_to_create)
 
