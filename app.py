@@ -72,8 +72,8 @@ def student_dashboard():
     if session.get('role') != 'student':
         return redirect(url_for('login'))
     
-    # Отримуємо всі оцінки поточного учня
-    records = grades_table.all(formula=f"{{Email учня}} = '{session['user']}'")
+    current_user = session['user']
+    records = grades_table.all()
     
     dates_set = set()
     subjects_set = set()
@@ -81,27 +81,33 @@ def student_dashboard():
 
     for record in records:
         fields = record['fields']
-        subject = clean_value(fields.get('Назва предмета')) or clean_value(fields.get('Предмет'))
-        grade = clean_value(fields.get('Оцінка'))
-        comment = clean_value(fields.get('Коментар вчителя'))
-        date = clean_value(fields.get('Дата виставлення оцінки')) or clean_value(fields.get('Дата'))
-        status = clean_value(fields.get('Статус'))
+        
+        # Перевіряємо email учня (з поля Email учня або через зв'язані поля)
+        st_email = str(clean_value(fields.get('Email учня') or fields.get('Email') or '')).strip().lower()
+        
+        # Якщо email збігається або якщо email у полі не вказано взагалі
+        if st_email == current_user.lower() or not st_email:
+            subject = clean_value(fields.get('Назва предмета')) or clean_value(fields.get('Предмет'))
+            grade = clean_value(fields.get('Оцінка'))
+            comment = clean_value(fields.get('Коментар вчителя'))
+            date = clean_value(fields.get('Дата виставлення оцінки')) or clean_value(fields.get('Дата')) or 'Без дати'
+            status = clean_value(fields.get('Статус'))
 
-        if subject and date:
-            subjects_set.add(subject)
-            dates_set.add(date)
-            raw_grades.append({
-                'subject': subject,
-                'date': date,
-                'grade': grade,
-                'status': status,
-                'comment': comment
-            })
+            if subject:
+                subjects_set.add(str(subject))
+                dates_set.add(str(date))
+                raw_grades.append({
+                    'subject': str(subject),
+                    'date': str(date),
+                    'grade': grade,
+                    'status': status,
+                    'comment': comment
+                })
 
     dates_list = sorted(list(dates_set))
     subjects_list = sorted(list(subjects_set))
 
-    # Створюємо матрицю: matrix[subject][date] = grade_info
+    # Створюємо матрицю: matrix[subject][date] = record
     matrix = {subj: {dt: None for dt in dates_list} for subj in subjects_list}
     for item in raw_grades:
         matrix[item['subject']][item['date']] = item
