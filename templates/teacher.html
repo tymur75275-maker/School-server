@@ -5,102 +5,48 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Панель вчителя</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f6f9;
-            margin: 0;
-            padding: 20px;
-        }
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 2px solid #eee;
-            padding-bottom: 10px;
-            margin-bottom: 20px;
-        }
-        .logout-btn {
-            background-color: #dc3545;
-            color: white;
-            text-decoration: none;
-            padding: 8px 15px;
-            border-radius: 4px;
-        }
-        .section {
-            margin-bottom: 30px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 10px;
-            text-align: left;
-        }
-        th {
-            background-color: #f8f9fa;
-        }
-        .student-row {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-            margin-bottom: 10px;
-            padding: 10px;
-            border: 1px solid #e0e0e0;
-            border-radius: 6px;
-            background-color: #fafafa;
-        }
-        .student-row label {
-            min-width: 200px;
-            font-weight: bold;
-        }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
-        select, input[type="number"], input[type="text"] {
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        .submit-btn {
-            background-color: #28a745;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        .submit-btn:hover {
-            background-color: #218838;
-        }
+        body { font-family: Arial, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; }
+        .container { max-width: 1100px; background: white; margin: 0 auto; padding: 25px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 20px; }
+        .btn-logout { background: #dc3545; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px; }
+        .section { margin-bottom: 30px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background: #f8f9fa; }
+        .form-group { margin-bottom: 15px; }
+        label { font-weight: bold; display: block; margin-bottom: 5px; }
+        select, input[type="text"], input[type="number"], input[type="date"] { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        .student-row { display: flex; align-items: center; gap: 15px; margin-bottom: 10px; background: #f9f9f9; padding: 10px; border-radius: 6px; }
+        .btn-submit { background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        .btn-submit:hover { background: #218838; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
             <h2>Панель вчителя</h2>
-            <a href="{{ url_for('logout') }}" class="logout-btn">Вийти</a>
+            <a href="{{ url_for('logout') }}" class="btn-logout">Вийти</a>
         </div>
 
-        <!-- Секція 1: Журнал виставлених оцінок (Матриця по датах) -->
+        <!-- Секція 1: Журнал оцінок з перемикачем предметів -->
         <div class="section">
             <h3>Журнал оцінок (Загальна матриця)</h3>
+
+            {% if teacher_subjects %}
+                <form method="GET" action="{{ url_for('teacher_dashboard') }}" style="margin-bottom: 15px;">
+                    <label for="filter_subject">Оберіть предмет для перегляду:</label>
+                    <select name="subject_id" id="filter_subject" onchange="this.form.submit()">
+                        {% for subj in teacher_subjects %}
+                            <option value="{{ subj.id }}" {% if subj.id == selected_subject_id %}selected{% endif %}>
+                                {{ subj.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </form>
+            {% else %}
+                <p style="color: red;">За вашим Email не знайдено закріплених предметів у таблиці "Предмети".</p>
+            {% endif %}
+
             {% if matrix and matrix_students %}
                 <div style="overflow-x: auto;">
                     <table>
@@ -132,89 +78,56 @@
                     </table>
                 </div>
             {% else %}
-                <p>Записів у журналі поки немає.</p>
+                <p>Записів у журналі за цим предметом поки немає.</p>
             {% endif %}
         </div>
 
-        <hr style="margin: 30px 0; border: 0; border-top: 1px solid #ccc;">
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;">
 
-        <!-- Секція 2: Форма виставляння оцінок -->
+        <!-- Секція 2: Форма виставлення оцінок -->
         <div class="section">
             <h3>Виставити оцінки</h3>
             <form action="{{ url_for('add_grade') }}" method="POST">
                 
-                <!-- Вибір предмета -->
+                <div class="form-group">
+                    <label for="grade_date">Оберіть дату уроку:</label>
+                    <input type="date" id="grade_date" name="grade_date" value="{{ today_date }}" max="{{ today_date }}" required>
+                </div>
+
                 <div class="form-group">
                     <label for="subject_id">Оберіть предмет:</label>
-                    <select name="subject_id" id="subject_id" required style="width: 100%; max-width: 300px;">
-                        <option value="" disabled selected>-- Виберіть предмет --</option>
-                        {% for s_id, s_name in subjects %}
-                            <option value="{{ s_id }}">{{ s_name }}</option>
+                    <select name="subject_id" id="subject_id" required>
+                        {% for subj in teacher_subjects %}
+                            <option value="{{ subj.id }}" {% if subj.id == selected_subject_id %}selected{% endif %}>
+                                {{ subj.name }}
+                            </option>
                         {% endfor %}
                     </select>
                 </div>
 
-                <!-- Фільтр за класом -->
-                <div class="form-group">
-                    <label for="class_filter">Фільтр за класом:</label>
-                    <select id="class_filter" onchange="filterStudents()" style="width: 100%; max-width: 300px;">
-                        <option value="all">Усі класи</option>
-                        {% set classes = [] %}
-                        {% for st_id, st_name, st_class in students %}
-                            {% if st_class and st_class not in classes %}
-                                {% set _ = classes.append(st_class) %}
-                            {% endif %}
-                        {% endfor %}
-                        {% for cls in classes %}
-                            <option value="{{ cls }}">{{ cls }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
+                <h4>Список учнів:</h4>
+                {% for st_id, st_name, st_class in students %}
+                    <div class="student-row">
+                        <input type="checkbox" name="student_ids[]" value="{{ st_id }}" id="st_{{ st_id }}">
+                        <label for="st_{{ st_id }}" style="width: 220px; font-weight: normal; margin: 0;">
+                            <strong>{{ st_name }}</strong> ({{ st_class }} клас)
+                        </label>
 
-                <label style="font-weight: bold; margin-bottom: 10px; display: block;">Список учнів:</label>
-                
-                <!-- Список учнів -->
-                <div id="students_list_container">
-                    {% for st_id, st_name, st_class in students %}
-                        <div class="student-row" data-class="{{ st_class }}">
-                            <input type="checkbox" name="student_ids[]" value="{{ st_id }}" id="st_{{ st_id }}">
-                            <label for="st_{{ st_id }}">{{ st_name }} {% if st_class %}({{ st_class }}){% endif %}</label>
-                            
-                            <select name="status_{{ st_id }}">
-                                <option value="Присутній">Присутній</option>
-                                <option value="Відсутній">Відсутній</option>
-                                <option value="Хворіє">Хворіє</option>
-                            </select>
+                        <select name="status_{{ st_id }}">
+                            <option value="Присутній">Присутній</option>
+                            <option value="Не присутній">Не присутній</option>
+                            <option value="Перездача">Перездача</option>
+                            <option value="Відстрочка">Відстрочка</option>
+                        </select>
 
-                            <input type="number" name="grade_{{ st_id }}" placeholder="Оцінка (1-12)" min="1" max="12" style="width: 110px;">
-                            <input type="text" name="comment_{{ st_id }}" placeholder="Коментар" style="flex-grow: 1;">
-                        </div>
-                    {% endfor %}
-                </div>
+                        <input type="number" name="grade_{{ st_id }}" min="1" max="12" placeholder="Оцінка (1-12)">
+                        <input type="text" name="comment_{{ st_id }}" placeholder="Коментар" style="flex-grow: 1;">
+                    </div>
+                {% endfor %}
 
-                <br>
-                <button type="submit" class="submit-btn">Зберегти оцінки</button>
+                <button type="submit" class="btn-submit" style="margin-top: 15px;">Зберегти оцінки</button>
             </form>
         </div>
     </div>
-
-    <script>
-        function filterStudents() {
-            var selectedClass = document.getElementById('class_filter').value;
-            var rows = document.querySelectorAll('.student-row');
-
-            rows.forEach(function(row) {
-                var rowClass = row.getAttribute('data-class');
-                if (selectedClass === 'all' || rowClass === selectedClass) {
-                    row.style.display = 'flex';
-                } else {
-                    row.style.display = 'none';
-                    // Скидаємо чекбокс, якщо учень прихований фільтром
-                    var checkbox = row.querySelector('input[type="checkbox"]');
-                    if (checkbox) checkbox.checked = false;
-                }
-            });
-        }
-    </script>
 </body>
 </html>
