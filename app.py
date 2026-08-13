@@ -186,8 +186,12 @@ def add_grade():
 
         records_to_create = []
 
-        # Проходимо по кожному учню з форми
+        # Проходимо по кожному позначеному учню з форми
         for st_id in student_ids:
+            # Перевіряємо, щоб st_id не був порожнім
+            if not st_id or str(st_id).strip() == '':
+                continue
+
             status = request.form.get(f'status_{st_id}', 'Присутній')
             grade_val = request.form.get(f'grade_{st_id}', '').strip()
             comment_val = request.form.get(f'comment_{st_id}', '').strip()
@@ -196,7 +200,7 @@ def add_grade():
             if status == 'Присутній' and not grade_val:
                 return f"<h3>Помилка: Для всіх присутніх учнів обов'язково має бути виставлена оцінка!</h3><br><a href='/teacher'>Повернутися назад</a>", 400
 
-            # Оскільки 'Учень' та 'Предмет' — це Link to another record, передаємо ID у масиві [id]
+            # Передаємо саме масиви ID для полів типу 'Link to another record'
             payload = {
                 'Учень': [st_id],
                 'Предмет': [subject_id],
