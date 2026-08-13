@@ -98,8 +98,7 @@
             <a href="{{ url_for('logout') }}" class="logout-btn">Вийти</a>
         </div>
 
-        <!-- Секція 1: Журнал виставлених оцінок -->
-        <!-- Секція 1: Журнал виставлених оцінок (Матриця) -->
+        <!-- Секція 1: Журнал виставлених оцінок (Матриця по датах) -->
         <div class="section">
             <h3>Журнал оцінок (Загальна матриця)</h3>
             {% if matrix and matrix_students %}
@@ -107,9 +106,9 @@
                     <table>
                         <thead>
                             <tr>
-                                <th>Учень / Предмет</th>
-                                {% for subj in matrix_subjects %}
-                                    <th>{{ subj }}</th>
+                                <th>Учень / Дата</th>
+                                {% for dt in matrix_dates %}
+                                    <th>{{ dt }}</th>
                                 {% endfor %}
                             </tr>
                         </thead>
@@ -117,8 +116,8 @@
                             {% for st in matrix_students %}
                                 <tr>
                                     <td><strong>{{ st }}</strong></td>
-                                    {% for subj in matrix_subjects %}
-                                        {% set g_list = matrix[st][subj] %}
+                                    {% for dt in matrix_dates %}
+                                        {% set g_list = matrix[st][dt] %}
                                         <td style="text-align: center;">
                                             {% if g_list %}
                                                 <strong>{{ g_list | join(', ') }}</strong>
