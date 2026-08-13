@@ -123,34 +123,38 @@ def teacher_dashboard():
     if session.get('role') != 'teacher':
         return redirect(url_for('login'))
     
-    # 1. Отримуємо всі оцінки для матриці
+    # 1. Отримуємо всі оцінки для матриці (Учень x Дата)
     records = grades_table.all()
     students_set = set()
-    subjects_set = set()
+    dates_set = set()
     raw_grades = []
 
     for record in records:
         fields = record['fields']
         student = clean_value(fields.get("Ім'я учня")) or clean_value(fields.get('Учень'))
-        subject = clean_value(fields.get('Назва предмета')) or clean_value(fields.get('Предмет'))
+        date = clean_value(fields.get('Дата виставлення оцінки')) or clean_value(fields.get('Дата')) or 'Без дати'
         grade = clean_value(fields.get('Оцінка'))
         status = clean_value(fields.get('Статус'))
 
-        if student and subject:
-            students_set.add(student)
-            subjects_set.add(subject)
-            raw_grades.append({'student': student, 'subject': subject, 'grade': grade or status})
+        if student:
+            students_set.add(str(student))
+            dates_set.add(str(date))
+            raw_grades.append({
+                'student': str(student), 
+                'date': str(date), 
+                'grade': grade or status
+            })
 
     students_matrix_list = sorted(list(students_set))
-    subjects_matrix_list = sorted(list(subjects_set))
+    dates_matrix_list = sorted(list(dates_set))
 
-    # Будуємо матрицю журналу для вчителя: matrix[student][subject] = grade
-    matrix = {st: {subj: [] for subj in subjects_matrix_list} for st in students_matrix_list}
+    # Будуємо матрицю журналу: matrix[student][date] = [grades]
+    matrix = {st: {dt: [] for dt in dates_matrix_list} for st in students_matrix_list}
     for g in raw_grades:
         if g['grade']:
-            matrix[g['student']][g['subject']].append(str(g['grade']))
+            matrix[g['student']][g['date']].append(str(g['grade']))
 
-    # 2. Список предметов для форми виставлення
+    # 2. Список предметів для форми виставлення
     subject_records = subjects_table.all()
     subjects_list = []
     for s in subject_records:
@@ -172,9 +176,10 @@ def teacher_dashboard():
     return render_template('teacher.html', 
                            matrix=matrix, 
                            matrix_students=students_matrix_list, 
-                           matrix_subjects=subjects_matrix_list, 
+                           matrix_dates=dates_matrix_list, 
                            subjects=subjects_list, 
                            students=students_list)
+
 @app.route('/add_grade', methods=['GET', 'POST'])
 def add_grade():
     if session.get('role') != 'teacher':
