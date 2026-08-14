@@ -51,16 +51,14 @@
             <h3>Журнал оцінок (Загальна матриця)</h3>
 
             {% if teacher_subjects %}
-                <form method="GET" action="{{ url_for('teacher_dashboard') }}" style="margin-bottom: 15px;">
-                    <label for="filter_subject">Оберіть предмет для перегляду:</label>
-                    <select name="subject_id" id="filter_subject" onchange="this.form.submit()">
-                        {% for subj in teacher_subjects %}
-                            <option value="{{ subj.id }}" {% if subj.id == selected_subject_id %}selected{% endif %}>
-                                {{ subj.name }}
-                            </option>
-                        {% endfor %}
-                    </select>
-                </form>
+                <div class="tabs">
+                    {% for subj in teacher_subjects %}
+                        <a href="{{ url_for('teacher_dashboard', subject_id=subj.id) }}" 
+                           class="tab-btn {% if subj.id == selected_subject_id %}active{% endif %}">
+                            {{ subj.name }}
+                        </a>
+                    {% endfor %}
+                </div>
             {% else %}
                 <p style="color: red;">За вашим Email не знайдено закріплених предметів у таблиці "Предмети".</p>
             {% endif %}
