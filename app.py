@@ -98,11 +98,12 @@ def student_dashboard():
                 subjects_set.add(str(subject))
                 dates_set.add(str(date))
                 raw_grades.append({
+                    'id': record['id'],
                     'subject': str(subject),
                     'date': str(date),
                     'grade': grade,
-                    'status': status,
-                    'comment': comment
+                    'status': status or 'Присутній',
+                    'comment': comment or ''
                 })
 
     dates_list = sorted(list(dates_set))
@@ -169,24 +170,27 @@ def teacher_dashboard():
             dt_val = clean_value(f.get('Дата виставлення оцінки')) or clean_value(f.get('Дата')) or 'Без дати'
             grade = clean_value(f.get('Оцінка'))
             status = clean_value(f.get('Статус'))
+            comment = clean_value(f.get('Коментар вчителя'))
 
             if student:
                 students_set.add(str(student))
                 dates_set.add(str(dt_val))
                 raw_grades.append({
+                    'id': rec['id'],
                     'student': str(student),
                     'date': str(dt_val),
-                    'grade': grade or status
+                    'grade': grade,
+                    'status': status or 'Присутній',
+                    'comment': comment or ''
                 })
 
     students_matrix_list = sorted(list(students_set))
     dates_matrix_list = sorted(list(dates_set))
 
-    # Створюємо матрицю журналу: matrix[student][date] = [grades]
+    # Створюємо матрицю журнала: matrix[student][date] = [список об'єктів оцінок]
     matrix = {st: {dt: [] for dt in dates_matrix_list} for st in students_matrix_list}
     for g in raw_grades:
-        if g['grade']:
-            matrix[g['student']][g['date']].append(str(g['grade']))
+        matrix[g['student']][g['date']].append(g)
 
     # 3. Список всіх учнів для форми виставлення
     student_records = students_table.all()
