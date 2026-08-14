@@ -95,9 +95,11 @@
                                     {% set item = matrix[subj][dt] %}
                                     <td style="text-align: center;">
                                         {% if item %}
-                                            <span class="grade-badge" title="{{ item.comment if item.comment else '' }}">
+                                            {% set cls = 'status-present' if item.status == 'Присутній' else ('status-absent' if item.status == 'Не присутній' else ('status-retake' if item.status == 'Перездача' else 'status-postponed')) %}
+                                            <div class="cell-grade {{ cls }}" 
+                                                 onclick="openStudentModal('{{ subj }}', '{{ item.date }}', '{{ item.status }}', '{{ item.grade or 'Немає' }}', '{{ item.comment or 'Відсутній' }}')">
                                                 {{ item.grade if item.grade else item.status }}
-                                            </span>
+                                            </div>
                                         {% else %}
                                             <span style="color: #ccc;">—</span>
                                         {% endif %}
