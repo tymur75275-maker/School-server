@@ -269,5 +269,43 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
+@app.route('/update_grade', methods=['POST'])
+def update_grade():
+    if session.get('role') != 'teacher':
+        return {'status': 'error', 'message': 'Недостатньо прав'}, 403
+
+    try:
+        record_id = request.form.get('record_id')
+        grade_val = request.form.get('grade')
+        status = request.form.get('status')
+        comment = request.form.get('comment')
+        grade_date = request.form.get('date')
+        subject_id = request.form.get('subject_id')
+
+        if not record_id:
+            return {'status': 'error', 'message': 'ID запису відсутній'}, 400
+
+        fields = {
+            'Статус': str(status),
+            'Коментар вчителя': comment if comment else ''
+        }
+
+        if status == 'Не присутній':
+            fields['Оцінка'] = None
+        elif grade_val:
+            fields['Оцінка'] = int(grade_val)
+
+        if grade_date:
+            fields['Дата виставлення оцінки'] = grade_date
+
+        if subject_id:
+            fields['Предмет'] = [subject_id]
+
+        grades_table.update(record_id, fields)
+        return {'status': 'success'}
+
+    except Exception as e:
+        return {'status': 'error', 'message': str(e)}, 500
+
 if __name__ == '__main__':
     app.run(debug=True)
