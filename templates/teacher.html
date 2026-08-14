@@ -145,5 +145,121 @@
             </form>
         </div>
     </div>
+        <!-- Модальне вікно редагування оцінки -->
+    <div id="teacherModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">Редагувати оцінку (<span id="modalStudentName"></span>)</div>
+            <form id="editGradeForm" onsubmit="saveGradeChange(event)">
+                <input type="hidden" id="modalRecordId">
+                
+                <div class="form-group">
+                    <label>Предмет:</label>
+                    <select id="modalSubject" required>
+                        {% for subj in teacher_subjects %}
+                            <option value="{{ subj.id }}">{{ subj.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+    
+                <div class="form-group">
+                    <label>Дата:</label>
+                    <input type="date" id="modalDate" required>
+                </div>
+    
+                <div class="form-group">
+                    <label>Статус:</label>
+                    <select id="modalStatus" onchange="toggleModalGradeInput()">
+                        <option value="Присутній">Присутній</option>
+                        <option value="Не присутній">Не присутній</option>
+                        <option value="Перездача">Перездача</option>
+                        <option value="Відстрочка">Відстрочка</option>
+                    </select>
+                </div>
+    
+                <div class="form-group">
+                    <label>Оцінка (1-12):</label>
+                    <input type="number" id="modalGrade" min="1" max="12">
+                </div>
+    
+                <div class="form-group">
+                    <label>Коментар вчителя:</label>
+                    <input type="text" id="modalComment" style="width: 100%;">
+                </div>
+    
+                <div class="modal-actions">
+                    <button type="button" class="btn-close" onclick="closeTeacherModal()">Скасувати</button>
+                    <button type="submit" class="btn-submit">Зберегти</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+    // Автоматичне вимкнення поля оцінки при виборі "Не присутній" у нижній формі
+    document.querySelectorAll('.student-row select').forEach(selectEl => {
+        selectEl.addEventListener('change', function() {
+            const row = this.closest('.student-row');
+            const gradeInput = row.querySelector('input[type="number"]');
+            if (this.value === 'Не присутній') {
+                gradeInput.value = '';
+                gradeInput.disabled = true;
+            } else {
+                gradeInput.disabled = false;
+            }
+        });
+    });
+    
+    function toggleModalGradeInput() {
+        const status = document.getElementById('modalStatus').value;
+        const gradeInput = document.getElementById('modalGrade');
+        if (status === 'Не присутній') {
+            gradeInput.value = '';
+            gradeInput.disabled = true;
+        } else {
+            gradeInput.disabled = false;
+        }
+    }
+    
+    function openTeacherModal(id, student, grade, status, comment, dt, subjectId) {
+        document.getElementById('modalRecordId').value = id;
+        document.getElementById('modalStudentName').innerText = student;
+        document.getElementById('modalGrade').value = grade;
+        document.getElementById('modalStatus').value = status;
+        document.getElementById('modalComment').value = comment;
+        document.getElementById('modalDate').value = dt;
+        document.getElementById('modalSubject').value = subjectId;
+    
+        toggleModalGradeInput();
+        document.getElementById('teacherModal').style.display = 'flex';
+    }
+    
+    function closeTeacherModal() {
+        document.getElementById('teacherModal').style.display = 'none';
+    }
+    
+    function saveGradeChange(e) {
+        e.preventDefault();
+        const formData = new FormData();
+        formData.append('record_id', document.getElementById('modalRecordId').value);
+        formData.append('grade', document.getElementById('modalGrade').value);
+        formData.append('status', document.getElementById('modalStatus').value);
+        formData.append('comment', document.getElementById('modalComment').value);
+        formData.append('date', document.getElementById('modalDate').value);
+        formData.append('subject_id', document.getElementById('modalSubject').value);
+    
+        fetch('/update_grade', {
+            method: 'POST',
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.status === 'success') {
+                window.location.reload();
+            } else {
+                alert('Помилка збереження: ' + data.message);
+            }
+        });
+    }
+    </script>
 </body>
 </html>
