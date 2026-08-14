@@ -215,17 +215,19 @@ def add_grade():
         return redirect(url_for('login'))
     
     try:
-        subject_id = request.form.get('subject_id')
+        subject_id = request.form.get('subject_id', '').strip()
         grade_date = request.form.get('grade_date')
         student_ids = request.form.getlist('student_ids[]')
         
+        # Перевірка: предмет має бути обов'язково вибраний
         if not subject_id or not student_ids:
-            return redirect(url_for('teacher_dashboard'))
+            return f"<h3>Помилка: Не обрано предмет або не вибрано жодного учня!</h3><br><a href='/teacher'>Повернутися назад</a>", 400
 
         records_to_create = []
 
         for st_id in student_ids:
-            if not st_id or str(st_id).strip() == '':
+            st_id = str(st_id).strip()
+            if not st_id:
                 continue
 
             status = request.form.get(f'status_{st_id}', 'Присутній')
@@ -235,15 +237,15 @@ def add_grade():
             if status == 'Присутній' and not grade_val:
                 return f"<h3>Помилка: Для всіх присутніх учнів обов'язково має бути виставлена оцінка!</h3><br><a href='/teacher'>Повернутися назад</a>", 400
 
-            # Зберігаємо зв'язки Link to Record у вигляді списку ID: [id]
-            # Та дату в полі "Дата виставлення оцінки"
+            # Формуємо payload з масивами ID для полів зв'язку Link to Record
             payload = {
                 'Учень': [st_id],
                 'Предмет': [subject_id],
-                'Статус': str(status),
-                'Дата виставлення оцінки': grade_date
+                'Статус': str(status)
             }
 
+            if grade_date:
+                payload['Дата виставлення оцінки'] = grade_date
             if grade_val:
                 payload['Оцінка'] = int(grade_val)
             if comment_val:
