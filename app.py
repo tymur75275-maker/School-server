@@ -162,7 +162,7 @@ def teacher_dashboard():
         
         # Якщо предмет збігається з вибраним предметом вчителя
         if selected_subject_name and str(subj_name).strip() == str(selected_subject_name).strip():
-            student = clean_value(f.get("Учень")) or clean_value(f.get("Ім'я учня"))
+            student = clean_value(f.get("Ім'я учня")) or clean_value(f.get("Ім'я учня"))
             dt_val = clean_value(f.get('Дата виставлення оцінки')) or clean_value(f.get('Дата')) or 'Без дати'
             grade = clean_value(f.get('Оцінка'))
             status = clean_value(f.get('Статус'))
