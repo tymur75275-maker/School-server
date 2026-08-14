@@ -114,5 +114,37 @@
             <p>Наразі у вас немає виставлених оцінок.</p>
         {% endif %}
     </div>
+    <!-- Модальне вікно перегляду деталізації оцінки -->
+    <div id="studentModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">Деталі оцінки</div>
+            
+            <div class="detail-item"><strong>Предмет:</strong> <span id="stSubject"></span></div>
+            <div class="detail-item"><strong>Дата:</strong> <span id="stDate"></span></div>
+            <div class="detail-item"><strong>Статус:</strong> <span id="stStatus"></span></div>
+            <div class="detail-item"><strong>Оцінка:</strong> <span id="stGrade"></span></div>
+            <div class="detail-item"><strong>Коментар вчителя:</strong> <span id="stComment"></span></div>
+    
+            <div style="margin-top: 20px; overflow: hidden;">
+                <button class="btn-close" onclick="closeStudentModal()">Закрити</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    function openStudentModal(subject, date, status, grade, comment) {
+        document.getElementById('stSubject').innerText = subject;
+        document.getElementById('stDate').innerText = date;
+        document.getElementById('stStatus').innerText = status;
+        document.getElementById('stGrade').innerText = grade;
+        document.getElementById('stComment').innerText = comment;
+
+        document.getElementById('studentModal').style.display = 'flex';
+    }
+
+    function closeStudentModal() {
+        document.getElementById('studentModal').style.display = 'none';
+    }
+    </script>
 </body>
 </html>
