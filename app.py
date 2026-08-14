@@ -126,53 +126,31 @@ def teacher_dashboard():
     
     teacher_email = str(session.get('user', '')).strip().lower()
 
-    # 1. Завантажуємо предмети та зв'язуємо ID предмета з його назвою та Email вчителя
+    # 1. Знаходимо всі предмети, які викладає ЦЕЙ вчитель (фільтр за Email у таблиці "Предмети")
     all_subjects = subjects_table.all()
     teacher_subjects = []
-    subject_id_to_name = {}
-
+    
     for subj in all_subjects:
         f = subj['fields']
-        s_id = subj['id']
-        s_name = clean_value(f.get('Назва предмета'))
         subj_email = str(clean_value(f.get('Email')) or '').strip().lower()
-
-        if s_name:
-            subject_id_to_name[s_id] = s_name
-
-        # Перевірка: чи належить предмет даному вчителю за Email
         if subj_email == teacher_email:
             teacher_subjects.append({
-                'id': s_id,
-                'name': s_name
+                'id': subj['id'],
+                'name': clean_value(f.get('Назва предмета'))
             })
 
-    # Поточний обраний предмет
+    # Отримуємо вибраний предмет зі списку (або перший за замовчуванням)
     selected_subject_id = request.args.get('subject_id')
     if not selected_subject_id and teacher_subjects:
         selected_subject_id = teacher_subjects[0]['id']
 
-    selected_subject_name = subject_id_to_name.get(selected_subject_id, '')
+    selected_subject_name = None
+    for s in teacher_subjects:
+        if s['id'] == selected_subject_id:
+            selected_subject_name = s['name']
+            break
 
-    # 2. Завантажуємо таблицю Учні: ID учня -> {Ім'я, Email}
-    student_records = students_table.all()
-    student_id_to_data = {}
-    students_list = []
-
-    for st in student_records:
-        st_id = st['id']
-        st_name = clean_value(st['fields'].get("Ім'я учня"))
-        st_email = str(clean_value(st['fields'].get("Електронна пошта")) or '').strip().lower()
-        st_class = clean_value(st['fields'].get("Клас"))
-
-        if st_name:
-            student_id_to_data[st_id] = {
-                'name': st_name,
-                'email': st_email
-            }
-            students_list.append((st_id, st_name, st_class))
-
-    # 3. Вичитуємо всі оцінки
+    # 2. Отримуємо оцінки ЛИШЕ для вибраного предмета цього вчителя
     all_grades = grades_table.all()
     students_set = set()
     dates_set = set()
@@ -180,31 +158,23 @@ def teacher_dashboard():
 
     for rec in all_grades:
         f = rec['fields']
-
-        # Витягуємо ID предмета (оскільки це Link to Record)
-        raw_subj = f.get('Предмет')
-        subj_id = raw_subj[0] if isinstance(raw_subj, list) and len(raw_subj) > 0 else raw_subj
-
-        # Фільтрація за вибраним предметом
-        if subj_id == selected_subject_id or (subj_id in subject_id_to_name and subject_id_to_name[subj_id] == selected_subject_name):
-            
-            # Витягуємо ID учня
-            raw_st = f.get('Учень')
-            st_id = raw_st[0] if isinstance(raw_st, list) and len(raw_st) > 0 else raw_st
-
-            # Визначаємо ім'я учня за його ID
-            student_info = student_id_to_data.get(st_id, {})
-            student_name = student_info.get('name') or clean_value(f.get("Ім'я учня"))
-
+        
+        # Беремо текстову назву з Lookup-поля "Назва предмета"
+        subj_name = clean_value(f.get('Назва предмета')) or clean_value(f.get('Предмет'))
+        
+        # Якщо предмет збігається з вибраним предметом вчителя
+        if selected_subject_name and str(subj_name).strip() == str(selected_subject_name).strip():
+            # Беремо ім'я учня з Lookup-поля "Ім'я учня"
+            student = clean_value(f.get("Ім'я учня"))
             dt_val = clean_value(f.get('Дата виставлення оцінки')) or clean_value(f.get('Дата')) or 'Без дати'
             grade = clean_value(f.get('Оцінка'))
             status = clean_value(f.get('Статус'))
 
-            if student_name:
-                students_set.add(str(student_name))
+            if student:
+                students_set.add(str(student))
                 dates_set.add(str(dt_val))
                 raw_grades.append({
-                    'student': str(student_name),
+                    'student': str(student),
                     'date': str(dt_val),
                     'grade': grade or status
                 })
@@ -212,11 +182,21 @@ def teacher_dashboard():
     students_matrix_list = sorted(list(students_set))
     dates_matrix_list = sorted(list(dates_set))
 
-    # Побудова матриці журналу
+    # Створюємо матрицю журналу: matrix[student][date] = [grades]
     matrix = {st: {dt: [] for dt in dates_matrix_list} for st in students_matrix_list}
     for g in raw_grades:
         if g['grade']:
             matrix[g['student']][g['date']].append(str(g['grade']))
+
+    # 3. Список всіх учнів для форми виставлення
+    student_records = students_table.all()
+    students_list = []
+    for st in student_records:
+        st_id = st['id']
+        st_name = clean_value(st['fields'].get("Ім'я учня"))
+        st_class = clean_value(st['fields'].get("Клас"))
+        if st_name:
+            students_list.append((st_id, st_name, st_class))
 
     today_str = date.today().isoformat()
 
