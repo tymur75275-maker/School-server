@@ -271,6 +271,29 @@
             }
         });
     }
+    function deleteGradeRecord() {
+        const recordId = document.getElementById('modalRecordId').value;
+    
+        if (!recordId) return;
+
+        if (confirm('Ви дійсно бажаєте видалити цю оцінку?')) {
+            const formData = new FormData();
+            formData.append('record_id', recordId);
+
+            fetch('/delete_grade', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    window.location.reload();
+                } else {
+                    alert('Помилка видалення: ' + data.message);
+                }
+            });
+        }
+    }
     </script>
 </body>
 </html>
