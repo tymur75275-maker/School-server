@@ -311,5 +311,23 @@ def update_grade():
     except Exception as e:
         return {'status': 'error', 'message': str(e)}, 500
 
+@app.route('/delete_grade', methods=['POST'])
+def delete_grade():
+    if session.get('role') != 'teacher':
+        return {'status': 'error', 'message': 'Недостатньо прав'}, 403
+
+    try:
+        record_id = request.form.get('record_id')
+
+        if not record_id:
+            return {'status': 'error', 'message': 'ID запису відсутній'}, 400
+
+        # Видалення запису з Airtable
+        grades_table.delete(record_id)
+        return {'status': 'success'}
+
+    except Exception as e:
+        return {'status': 'error', 'message': str(e)}, 500
+
 if __name__ == '__main__':
     app.run(debug=True)
