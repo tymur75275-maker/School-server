@@ -147,6 +147,17 @@
     function closeStudentModal() {
         document.getElementById('studentModal').style.display = 'none';
     }
+    // Закриття при кліку поза межами вікна (на темний фон/overlay)
+window.addEventListener('click', function(event) {
+  const modal = document.getElementById('modal');
+  if (event.target === modal) {
+    closeModal();
+  }
+});
+
+function closeModal() {
+  document.getElementById('modal').style.display = 'none';
+}
     </script>
 </body>
 </html>
