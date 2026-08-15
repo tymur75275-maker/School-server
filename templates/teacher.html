@@ -194,9 +194,12 @@
                     <input type="text" id="modalComment" style="width: 100%;">
                 </div>
     
-                <div class="modal-actions">
-                    <button type="button" class="btn-close" onclick="closeTeacherModal()">Скасувати</button>
-                    <button type="submit" class="btn-submit">Зберегти</button>
+                <div class="modal-actions" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                    <button type="button" class="btn-delete" onclick="deleteGradeRecord()">Видалити</button>
+                        <div>
+                            <button type="button" class="btn-close" onclick="closeTeacherModal()">Скасувати</button>
+                            <button type="submit" class="btn-submit">Зберегти</button>
+                        </div>
                 </div>
             </form>
         </div>
