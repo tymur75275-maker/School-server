@@ -297,14 +297,14 @@
     }
     // Закриття при кліку поза межами вікна (на темний фон/overlay)
 window.addEventListener('click', function(event) {
-  const modal = document.getElementById('modal');
+  const modal = document.getElementById('teacherModal');
   if (event.target === modal) {
     closeModal();
   }
 });
 
 function closeModal() {
-  document.getElementById('teacherModal').style.display = 'none';
+  document.getElementById('modal').style.display = 'none';
 }
     </script>
 </body>
