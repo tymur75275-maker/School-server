@@ -82,19 +82,20 @@
                                     <td><strong>{{ st }}</strong></td>
                                     {% for dt in matrix_dates %}
                                         {% set g_list = matrix[st][dt] %}
-                                        <td style="text-align: center; vertical-align: middle;">
-                                            {% if g_list %}
-                                                {% for g in g_list %}
-                                                    {% set cls = 'status-present' if g.status == 'Присутній' else ('status-absent' if g.status == 'Не присутній' else ('status-retake' if g.status == 'Перездача' else 'status-postponed')) %}
-                                                    <div class="cell-grade {{ cls }}" 
-                                                         onclick="openTeacherModal('{{ g.id }}', '{{ st }}', '{{ g.grade or '' }}', '{{ g.status }}', '{{ g.comment }}', '{{ dt }}', '{{ selected_subject_id }}')">
-                                                        {{ g.grade if g.grade else g.status }}
-                                                    </div>
-                                                {% endfor %}
-                                            {% else %}
-                                                <span style="color: #ccc;">—</span>
-                                            {% endif %}
-                                        </td>
+                                        <td style="text-align: center; vertical-align: middle; cursor: pointer;" 
+                                        onclick="openTeacherModal('', '{{ st }}', '', 'Присутній', '', '{{ dt }}', '{{ selected_subject_id }}')">
+                                        {% if g_list %}
+                                            {% for g in g_list %}
+                                                {% set cls = 'status-present' if g.status == 'Присутній' else ('status-absent' if g.status == 'Не присутній' else ('status-retake' if g.status == 'Перездача' else 'status-postponed')) %}
+                                                <div class="cell-grade {{ cls }}" 
+                                                     onclick="event.stopPropagation(); openTeacherModal('{{ g.id }}', '{{ st }}', '{{ g.grade or '' }}', '{{ g.status }}', '{{ g.comment }}', '{{ dt }}', '{{ selected_subject_id }}')">
+                                                    {{ g.grade if g.grade else g.status }}
+                                                </div>
+                                            {% endfor %}
+                                        {% else %}
+                                            <span style="color: #ccc; display: block; width: 100%; height: 100%;">—</span>
+                                        {% endif %}
+                                    </td>
                                     {% endfor %}
                                 </tr>
                             {% endfor %}
