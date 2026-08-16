@@ -329,5 +329,34 @@ def delete_grade():
     except Exception as e:
         return {'status': 'error', 'message': str(e)}, 500
 
+@app.route('/add_single_grade', methods=['POST'])
+def add_single_grade():
+    student_name = request.form.get('student_name')
+    subject_id = request.form.get('subject_id')
+    grade_date = request.form.get('date')
+    status = request.form.get('status')
+    grade = request.form.get('grade')
+    comment = request.form.get('comment')
+
+    # Пошук запису учня за іменем для отримання його ID
+    students = students_table.all(formula=f"{{Ім'я учня}} = '{student_name}'")
+    
+    fields = {
+        'Предмет': [subject_id],
+        'Дата виставлення оцінки': grade_date,
+        'Статус': status,
+        'Коментар вчителя': comment or ''
+    }
+    
+    if students:
+        fields['Учень'] = [students[0]['id']]
+        
+    if grade and status != 'Не присутній':
+        fields['Оцінка'] = int(grade)
+
+    grades_table.create(fields)
+    return jsonify({'status': 'success'})
+
+
 if __name__ == '__main__':
     app.run(debug=True)
