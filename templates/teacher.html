@@ -252,15 +252,21 @@
     
     function saveGradeChange(e) {
         e.preventDefault();
+        const recordId = document.getElementById('modalRecordId').value;
         const formData = new FormData();
-        formData.append('record_id', document.getElementById('modalRecordId').value);
+    
+        formData.append('record_id', recordId);
         formData.append('grade', document.getElementById('modalGrade').value);
         formData.append('status', document.getElementById('modalStatus').value);
         formData.append('comment', document.getElementById('modalComment').value);
         formData.append('date', document.getElementById('modalDate').value);
         formData.append('subject_id', document.getElementById('modalSubject').value);
+        formData.append('student_name', document.getElementById('modalStudentName').innerText);
+
+        // Якщо recordId є — це ОНОВЛЕННЯ, якщо немає — це СТВОРЕННЯ нової оцінки
+        const endpoint = recordId ? '/update_grade' : '/add_single_grade';
     
-        fetch('/update_grade', {
+        fetch(endpoint, {
             method: 'POST',
             body: formData
         })
