@@ -264,7 +264,7 @@
         formData.append('student_name', document.getElementById('modalStudentName').innerText);
 
         // Якщо recordId є — це ОНОВЛЕННЯ, якщо немає — це СТВОРЕННЯ нової оцінки
-        const endpoint = recordId ? '/update_grade' : '/add_grade';
+        const endpoint = recordId ? '/update_grade' : '/add_single_grade';
     
         fetch(endpoint, {
             method: 'POST',
