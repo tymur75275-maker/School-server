@@ -214,7 +214,7 @@ def teacher_dashboard():
         selected_subject_id=selected_subject_id,
         selected_subject_name=selected_subject_name,
         students=students_list,
-        today_date=today_str
+        today_date=today_str,
         email=teacher_email
     )
 
