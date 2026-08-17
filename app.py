@@ -118,8 +118,7 @@ def student_dashboard():
                            subjects=subjects_list, 
                            dates=dates_list, 
                            matrix=matrix, 
-                           email=session['user'],
-                           email=st_email)
+                           email=session['user'])
 
 @app.route('/teacher')
 def teacher_dashboard():
