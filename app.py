@@ -58,7 +58,11 @@ def login():
             # Перевіряємо, чи збігається пароль
             if str(stored_password) == password:
                 session['user'] = email
-                if str(user_role).lower() in ['teacher', 'admin']:
+                role_lower = str(user_role).lower()
+                if role_lower == 'admin':
+                    session['role'] = 'admin'
+                    return redirect(url_for('admin_dashboard'))
+                elif role_lower == 'teacher':
                     session['role'] = 'teacher'
                     return redirect(url_for('teacher_dashboard'))
                 else:
