@@ -35,7 +35,10 @@ def home():
 def login():
     # Перевірка: якщо користувач ВЖЕ авторизований, редиректимо його геть з логину
     if 'user' in session:
-        if session.get('role') == 'teacher':
+        role = session.get('role')
+        if role == 'admin':
+            return redirect(url_for('admin_dashboard'))
+        elif role == 'teacher':
             return redirect(url_for('teacher_dashboard'))
         return redirect(url_for('student_dashboard'))
 
@@ -67,6 +70,18 @@ def login():
             error = 'Користувача з таким Email не знайдено'
             
     return render_template('login.html', error=error)
+
+@app.route('/admin')
+def admin_page():
+    # Перевірка авторизації
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    
+    # Перевірка ролі (значення ролі з Airtable має бути 'Admin')
+    if session['user'].get('Role') != 'Admin':
+        return "Доступ заборонено. Потрібні права адміністратора.", 403
+
+    return render_template('admin.html')
 
 @app.route('/student')
 def student_dashboard():
