@@ -118,7 +118,7 @@
     <!-- Модальне вікно перегляду деталізації оцінки -->
     <div id="studentModal" class="modal-overlay">
         <div class="modal-content">
-            <span class="close-btn" onclick="closeModal()">&times;</span>
+            <span class="close-btn" onclick="closeStudentModal()">&times;</span>
             <div class="modal-header">Деталі оцінки</div>
             
             <div class="detail-item"><strong>Предмет:</strong> <span id="stSubject"></span></div>
@@ -149,15 +149,13 @@
     }
     // Закриття при кліку поза межами вікна (на темний фон/overlay)
 window.addEventListener('click', function(event) {
-  const modal = document.getElementById('modal');
+  const modal = document.getElementById('studentModal');
   if (event.target === modal) {
-    closeModal();
+    closeStudentModal();
   }
 });
 
-function closeModal() {
-  document.getElementById('modal').style.display = 'none';
-}
+
     </script>
 </body>
 </html>
