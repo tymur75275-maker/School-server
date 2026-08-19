@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 from pyairtable import Api
 from datetime import date
 
@@ -37,7 +37,7 @@ def login():
     if 'user' in session:
         role = session.get('role')
         if role == 'admin':
-            return redirect(url_for('admin_dashboard'))
+            return redirect(url_for('admin_page'))
         elif role == 'teacher':
             return redirect(url_for('teacher_dashboard'))
         return redirect(url_for('student_dashboard'))
@@ -61,7 +61,7 @@ def login():
                 role_lower = str(user_role).lower()
                 if role_lower == 'admin':
                     session['role'] = 'admin'
-                    return redirect(url_for('admin_dashboard'))
+                    return redirect(url_for('admin_page'))
                 elif role_lower == 'teacher':
                     session['role'] = 'teacher'
                     return redirect(url_for('teacher_dashboard'))
