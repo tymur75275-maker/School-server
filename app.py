@@ -85,7 +85,7 @@ def admin_page():
     if session['user'].get('Role') != 'Admin':
         return "Доступ заборонено. Потрібні права адміністратора.", 403
 
-    return render_template('admin.html')
+    return render_template('admin.html', email=session['user'],)
 
 @app.route('/student')
 def student_dashboard():
