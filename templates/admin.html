@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Кабінет вчителя</title>
+    <title>Панель Адміністратора</title>
     <style>
-        body {max-width: 1200px, font-family: Arial, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; }
-        .container { width: 100%, max-width: 1200px, background: #ff0018; margin: 0 auto; padding: 25px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        body { font-family: Arial, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; }
+        .container { width: 100%; max-width: 1250px; background: #ffffff; margin: 0 auto; padding: 25px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
         .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 20px; }
-        .btn-logout { background: #dc3545; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px; }
-        .section { margin-bottom: 30px; }
+        .btn-logout { background: #dc3545; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px; font-weight: bold; }
+        .admin-badge { background: #6f42c1; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-left: 8px; }
+        .section { margin-bottom: 35px; }
         table { width: 100%; border-collapse: collapse; margin-top: 15px; }
         th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
         th { background: #f8f9fa; }
@@ -19,10 +20,12 @@
         .student-row { display: flex; align-items: center; gap: 15px; margin-bottom: 10px; background: #f9f9f9; padding: 10px; border-radius: 6px; }
         .btn-submit { background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; }
         .btn-submit:hover { background: #218838; }
+        .btn-assign { background: #0d6efd; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+
         /* Вкладки предметів */
-        .tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid #ddd; }
-        .tab-btn { padding: 10px 18px; background: #e9ecef; border: none; border-radius: 6px 6px 0 0; cursor: pointer; text-decoration: none; color: #333; font-weight: bold; }
-        .tab-btn.active { background: #007bff; color: white; }
+        .tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid #ddd; overflow-x: auto; padding-bottom: 5px; }
+        .tab-btn { padding: 8px 16px; background: #e9ecef; border: none; border-radius: 6px 6px 0 0; cursor: pointer; text-decoration: none; color: #333; font-weight: bold; white-space: nowrap; }
+        .tab-btn.active { background: #6f42c1; color: white; }
         
         /* Кольори статусів клітинок */
         .cell-grade { cursor: pointer; border-radius: 4px; padding: 6px; display: block; font-weight: bold; transition: background 0.2s; }
@@ -31,39 +34,81 @@
         .status-retake { background-color: #fff3cd; color: #856404; }      /* Перездача - жовтий/помаранчевий */
         .status-postponed { background-color: #d1ecf1; color: #0c5460; }   /* Відстрочка - блакитний */
         
-        /* Модальне вікно (Панелька) */
+        /* Модальне вікно */
         .modal-overlay { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
-        .modal-content { background: white; padding: 25px; border-radius: 8px; width: 400px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .modal-content { background: white; padding: 25px; border-radius: 8px; width: 420px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
         .modal-header { font-size: 18px; font-weight: bold; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
-        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+        .modal-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; }
         .btn-close { background: #6c757d; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; }
         .btn-delete { background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; }
         .btn-delete:hover { background: #c82333; }
+        .close-btn { float: right; font-size: 20px; cursor: pointer; font-weight: bold; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h2>Кабінет вчителя</h2>
-            <span style="margin-right: 15px; font-weight: bold;">{{ email }}</span>
-            <a href="{{ url_for('logout') }}" class="btn-logout">Вийти</a>
+            <h2>Панель Адміністратора <span class="admin-badge">Admin</span></h2>
+            <div>
+                <span style="margin-right: 15px; font-weight: bold;">{{ email }}</span>
+                <a href="{{ url_for('logout') }}" class="btn-logout">Вийти</a>
+            </div>
         </div>
 
-        <!-- Секція 1: Журнал оцінок з перемикачем предметів -->
-        <div class="section">
-            <h3>Журнал оцінок</h3>
+        <!-- Секція 1: Керування предметами вчителів -->
+        <div class="section" style="background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #e9ecef;">
+            <h3 style="margin-top: 0;">Закріплення предметів за вчителями</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Вчитель</th>
+                        <th>Email</th>
+                        <th>Закріплені предмети</th>
+                        <th style="width: 120px;">Дія</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in teachers %}
+                    <tr>
+                        <td><strong>{{ t.name }}</strong></td>
+                        <td>{{ t.email }}</td>
+                        <td>
+                            {% set assigned_names = [] %}
+                            {% for s in all_subjects %}
+                                {% if s.id in t.assigned_subject_ids %}
+                                    {% set _ = assigned_names.append(s.name) %}
+                                {% endif %}
+                            {% endfor %}
+                            {{ assigned_names|join(', ') if assigned_names else '<em style="color:#888;">Немає предметів</em>'|safe }}
+                        </td>
+                        <td>
+                            <button type="button" class="btn-assign" onclick="openAssignModal('{{ t.id }}', '{{ t.name }}', {{ t.assigned_subject_ids|tojson }})">
+                                Налаштувати
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
 
-            {% if teacher_subjects %}
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;">
+
+        <!-- Секція 2: Загальний Журнал оцінок -->
+        <div class="section">
+            <h3>Повний журнал оцінок (усі предмети)</h3>
+
+            {% if all_subjects %}
                 <div class="tabs">
-                    {% for subj in teacher_subjects %}
-                        <a href="{{ url_for('teacher_dashboard', subject_id=subj.id) }}" 
+                    {% for subj in all_subjects %}
+                        <a href="{{ url_for('admin_page', subject_id=subj.id) }}" 
                            class="tab-btn {% if subj.id == selected_subject_id %}active{% endif %}">
                             {{ subj.name }}
                         </a>
                     {% endfor %}
                 </div>
             {% else %}
-                <p style="color: red;">За вашим Email не знайдено закріплених предметів.</p>
+                <p style="color: red;">Предметів у системі не знайдено.</p>
             {% endif %}
 
             {% if matrix and matrix_students %}
@@ -84,7 +129,7 @@
                                     {% for dt in matrix_dates %}
                                         {% set g_list = matrix[st][dt] %}
                                         <td style="text-align: center; vertical-align: middle; cursor: pointer;" 
-                                        onclick="openTeacherModal('', '{{ st }}', '', 'Присутній', '', '{{ dt }}', '{{ selected_subject_id }}')">
+                                            onclick="openTeacherModal('', '{{ st }}', '', 'Присутній', '', '{{ dt }}', '{{ selected_subject_id }}')">
                                         {% if g_list %}
                                             {% for g in g_list %}
                                                 {% set cls = 'status-present' if g.status == 'Присутній' else ('status-absent' if g.status == 'Не присутній' else ('status-retake' if g.status == 'Перездача' else 'status-postponed')) %}
@@ -110,9 +155,9 @@
 
         <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;">
 
-        <!-- Секція 2: Форма виставлення оцінок -->
+        <!-- Секція 3: Форма виставлення оцінок -->
         <div class="section">
-            <h3>Виставити оцінки</h3>
+            <h3>Виставити оцінки (Адмін-режим)</h3>
             <form action="{{ url_for('add_grade') }}" method="POST">
                 
                 <div class="form-group">
@@ -123,7 +168,7 @@
                 <div class="form-group">
                     <label for="subject_id">Оберіть предмет:</label>
                     <select name="subject_id" id="subject_id" required>
-                        {% for subj in teacher_subjects %}
+                        {% for subj in all_subjects %}
                             <option value="{{ subj.id }}" {% if subj.id == selected_subject_id %}selected{% endif %}>
                                 {{ subj.name }}
                             </option>
@@ -155,7 +200,33 @@
             </form>
         </div>
     </div>
-        <!-- Модальне вікно редагування оцінки -->
+
+    <!-- Модальне вікно призначення предметів вчителю -->
+    <div id="assignModal" class="modal-overlay">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeAssignModal()">&times;</span>
+            <div class="modal-header">Предмети для: <span id="assignTeacherName"></span></div>
+            <form id="assignSubjectForm" onsubmit="saveSubjectAssignment(event)">
+                <input type="hidden" id="assignTeacherId">
+                <div class="form-group" style="max-height: 250px; overflow-y: auto; padding-right: 5px;">
+                    {% for subj in all_subjects %}
+                        <div style="margin-bottom: 8px;">
+                            <label style="font-weight: normal; cursor: pointer;">
+                                <input type="checkbox" name="teacher_subjects" value="{{ subj.id }}" class="subj-checkbox">
+                                {{ subj.name }}
+                            </label>
+                        </div>
+                    {% endfor %}
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-close" onclick="closeAssignModal()">Скасувати</button>
+                    <button type="submit" class="btn-submit">Зберегти</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Модальне вікно редагування оцінки -->
     <div id="teacherModal" class="modal-overlay">
         <div class="modal-content">
             <span class="close-btn" onclick="closeTeacherModal()">&times;</span>
@@ -166,7 +237,7 @@
                 <div class="form-group">
                     <label>Предмет:</label>
                     <select id="modalSubject" required>
-                        {% for subj in teacher_subjects %}
+                        {% for subj in all_subjects %}
                             <option value="{{ subj.id }}">{{ subj.name }}</option>
                         {% endfor %}
                     </select>
@@ -197,19 +268,18 @@
                     <input type="text" id="modalComment" style="width: 100%;">
                 </div>
     
-                <div class="modal-actions" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <div class="modal-actions">
                     <button type="button" id="btnDeleteRecord" class="btn-delete" onclick="deleteGradeRecord()">Видалити</button>
-                        <div>
-                            <button type="button" class="btn-close" onclick="closeTeacherModal()">Скасувати</button>
-                            <button type="submit" class="btn-submit">Зберегти</button>
-                        </div>
+                    <div>
+                        <button type="button" class="btn-close" onclick="closeTeacherModal()">Скасувати</button>
+                        <button type="submit" class="btn-submit">Зберегти</button>
+                    </div>
                 </div>
             </form>
         </div>
     </div>
     
     <script>
-    // Автоматичне вимкнення поля оцінки при виборі "Не присутній" у нижній формі
     document.querySelectorAll('.student-row select').forEach(selectEl => {
         selectEl.addEventListener('change', function() {
             const row = this.closest('.student-row');
@@ -250,6 +320,46 @@
     function closeTeacherModal() {
         document.getElementById('teacherModal').style.display = 'none';
     }
+
+    function openAssignModal(teacherId, teacherName, assignedSubjIds) {
+        document.getElementById('assignTeacherId').value = teacherId;
+        document.getElementById('assignTeacherName').innerText = teacherName;
+
+        document.querySelectorAll('.subj-checkbox').forEach(cb => {
+            cb.checked = assignedSubjIds.includes(cb.value);
+        });
+
+        document.getElementById('assignModal').style.display = 'flex';
+    }
+
+    function closeAssignModal() {
+        document.getElementById('assignModal').style.display = 'none';
+    }
+
+    function saveSubjectAssignment(e) {
+        e.preventDefault();
+        const teacherId = document.getElementById('assignTeacherId').value;
+        const selectedCheckboxes = document.querySelectorAll('.subj-checkbox:checked');
+        
+        const formData = new FormData();
+        formData.append('teacher_id', teacherId);
+        selectedCheckboxes.forEach(cb => {
+            formData.append('subject_ids[]', cb.value);
+        });
+
+        fetch('/admin/assign_subject', {
+            method: 'POST',
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                window.location.reload();
+            } else {
+                alert('Помилка: ' + data.message);
+            }
+        });
+    }
     
     function saveGradeChange(e) {
         e.preventDefault();
@@ -264,7 +374,6 @@
         formData.append('subject_id', document.getElementById('modalSubject').value);
         formData.append('student_name', document.getElementById('modalStudentName').innerText);
 
-        // Якщо recordId є — це ОНОВЛЕННЯ, якщо немає — це СТВОРЕННЯ нової оцінки
         const endpoint = recordId ? '/update_grade' : '/add_single_grade';
     
         fetch(endpoint, {
@@ -280,6 +389,7 @@
             }
         });
     }
+
     function deleteGradeRecord() {
         const recordId = document.getElementById('modalRecordId').value;
     
@@ -303,15 +413,13 @@
             });
         }
     }
-    // Закриття при кліку поза межами вікна (на темний фон/overlay)
-window.addEventListener('click', function(event) {
-  const modal = document.getElementById('teacherModal');
-  if (event.target === modal) {
-    closeTeacherModal();
-  }
-});
 
-
+    window.addEventListener('click', function(event) {
+        const tModal = document.getElementById('teacherModal');
+        const aModal = document.getElementById('assignModal');
+        if (event.target === tModal) closeTeacherModal();
+        if (event.target === aModal) closeAssignModal();
+    });
     </script>
 </body>
 </html>

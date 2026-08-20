@@ -77,67 +77,145 @@ def login():
 
 @app.route('/admin')
 def admin_page():
-    # Перевірка авторизації
+    # Перевірка авторизації та ролі
     if 'user' not in session:
         return redirect(url_for('login'))
     
-    # Перевірка ролі (значення ролі з Airtable має бути 'Admin')
     if session.get('role') != 'admin':
         return "Доступ заборонено. Потрібні права адміністратора.", 403
 
-    return render_template('admin.html', email=session['user'],)
+    admin_email = session['user']
 
-@app.route('/student')
-def student_dashboard():
-    if session.get('role') != 'student':
-        return redirect(url_for('login'))
-    
-    current_user = session['user']
-    records = grades_table.all()
-    
+    # 1. Отримуємо ВСІ предмети для адміна (не за фільтром вчителя)
+    all_subjects_records = subjects_table.all()
+    all_subjects = []
+    for subj in all_subjects_records:
+        f = subj['fields']
+        s_name = clean_value(f.get('Назва предмета'))
+        if s_name:
+            all_subjects.append({
+                'id': subj['id'],
+                'name': s_name
+            })
+
+    # Сортуємо предмети за алфавітом
+    all_subjects = sorted(all_subjects, key=lambda x: x['name'])
+
+    # Отримуємо вибраний предмет (за замовчуванням — перший зі списку)
+    selected_subject_id = request.args.get('subject_id')
+    if not selected_subject_id and all_subjects:
+        selected_subject_id = all_subjects[0]['id']
+
+    selected_subject_name = None
+    for s in all_subjects:
+        if s['id'] == selected_subject_id:
+            selected_subject_name = s['name']
+            break
+
+    # 2. Отримуємо оцінки для вибраного предмета
+    all_grades = grades_table.all()
+    students_set = set()
     dates_set = set()
-    subjects_set = set()
     raw_grades = []
 
-    for record in records:
-        fields = record['fields']
+    for rec in all_grades:
+        f = rec['fields']
+        subj_name = clean_value(f.get('Назва предмета')) or clean_value(f.get('Предмет'))
         
-        # Перевіряємо email учня (з поля Email учня або через зв'язані поля)
-        st_email = str(clean_value(fields.get('Email учня') or fields.get('Email') or '')).strip().lower()
-        
-        # Якщо email збігається або якщо email у полі не вказано взагалі
-        if st_email == current_user.lower() or not st_email:
-            subject = clean_value(fields.get('Назва предмета')) or clean_value(fields.get('Предмет'))
-            grade = clean_value(fields.get('Оцінка'))
-            comment = clean_value(fields.get('Коментар вчителя'))
-            date = clean_value(fields.get('Дата виставлення оцінки')) or clean_value(fields.get('Дата')) or 'Без дати'
-            status = clean_value(fields.get('Статус'))
+        if selected_subject_name and str(subj_name).strip() == str(selected_subject_name).strip():
+            student = clean_value(f.get("Ім'я учня"))
+            dt_val = clean_value(f.get('Дата виставлення оцінки')) or clean_value(f.get('Дата')) or 'Без дати'
+            grade = clean_value(f.get('Оцінка'))
+            status = clean_value(f.get('Статус'))
+            comment = clean_value(f.get('Коментар вчителя'))
 
-            if subject:
-                subjects_set.add(str(subject))
-                dates_set.add(str(date))
+            if student:
+                students_set.add(str(student))
+                dates_set.add(str(dt_val))
                 raw_grades.append({
-                    'id': record['id'],
-                    'subject': str(subject),
-                    'date': str(date),
+                    'id': rec['id'],
+                    'student': str(student),
+                    'date': str(dt_val),
                     'grade': grade,
                     'status': status or 'Присутній',
                     'comment': comment or ''
                 })
 
-    dates_list = sorted(list(dates_set))
-    subjects_list = sorted(list(subjects_set))
+    students_matrix_list = sorted(list(students_set))
+    dates_matrix_list = sorted(list(dates_set))
 
-    # Створюємо матрицю: matrix[subject][date] = record
-    matrix = {subj: {dt: None for dt in dates_list} for subj in subjects_list}
-    for item in raw_grades:
-        matrix[item['subject']][item['date']] = item
+    matrix = {st: {dt: [] for dt in dates_matrix_list} for st in students_matrix_list}
+    for g in raw_grades:
+        matrix[g['student']][g['date']].append(g)
 
-    return render_template('student.html', 
-                           subjects=subjects_list, 
-                           dates=dates_list, 
-                           matrix=matrix, 
-                           email=session['user'])
+    # 3. Список всіх учнів для форми виставлення
+    student_records = students_table.all()
+    students_list = []
+    for st in student_records:
+        st_id = st['id']
+        st_name = clean_value(st['fields'].get("Ім'я учня"))
+        st_class = clean_value(st['fields'].get("Клас"))
+        if st_name:
+            students_list.append((st_id, st_name, st_class))
+
+    students_list = sorted(students_list, key=lambda x: x[1])
+
+    # 4. Список усіх вчителів та їх закріплених предметів (для модального вікна / блоку призначень)
+    users_records = users_table.all()
+    teachers_list = []
+    for u in users_records:
+        uf = u['fields']
+        u_role = str(clean_value(uf.get('Role'))).lower()
+        if u_role == 'teacher':
+            t_id = u['id']
+            t_name = clean_value(uf.get('Full Name')) or clean_value(uf.get('Email'))
+            t_email = clean_value(uf.get('Email'))
+            # Отримуємо ID предметів, зв'язаних з цим вчителем
+            t_subjs = uf.get('Предмети', [])
+            if not isinstance(t_subjs, list):
+                t_subjs = [t_subjs] if t_subjs else []
+
+            teachers_list.append({
+                'id': t_id,
+                'name': t_name,
+                'email': t_email,
+                'assigned_subject_ids': t_subjs
+            })
+
+    today_str = date.today().isoformat()
+
+    return render_template(
+        'admin.html',
+        matrix=matrix,
+        matrix_students=students_matrix_list,
+        matrix_dates=dates_matrix_list,
+        all_subjects=all_subjects,
+        selected_subject_id=selected_subject_id,
+        selected_subject_name=selected_subject_name,
+        students=students_list,
+        teachers=teachers_list,
+        today_date=today_str,
+        email=admin_email
+    )
+
+@app.route('/admin/assign_subject', methods=['POST'])
+def assign_subject():
+    if session.get('role') != 'admin':
+        return jsonify({'status': 'error', 'message': 'Недостатньо прав'}), 403
+
+    try:
+        teacher_id = request.form.get('teacher_id')
+        subject_ids = request.form.getlist('subject_ids[]')
+
+        if not teacher_id:
+            return jsonify({'status': 'error', 'message': 'Вчителя не вказано'}), 400
+
+        # Оновлюємо зв'язок Link to Record полів у таблиці Users
+        users_table.update(teacher_id, {'Предмети': subject_ids})
+        return jsonify({'status': 'success'})
+
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/teacher')
 def teacher_dashboard():
