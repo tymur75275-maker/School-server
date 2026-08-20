@@ -82,7 +82,7 @@ def admin_page():
         return redirect(url_for('login'))
     
     # Перевірка ролі (значення ролі з Airtable має бути 'Admin')
-    if session['user'].get('role') != 'admin':
+    if session.get('role') != 'admin':
         return "Доступ заборонено. Потрібні права адміністратора.", 403
 
     return render_template('admin.html', email=session['user'],)
