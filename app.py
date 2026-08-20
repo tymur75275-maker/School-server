@@ -316,7 +316,7 @@ def teacher_dashboard():
 
 @app.route('/add_grade', methods=['POST'])
 def add_grade():
-    if session.get('role') != 'teacher':
+    if session.get('role') != 'teacher' and session.get('role') != 'admin':
         return redirect(url_for('login'))
     
     try:
@@ -373,7 +373,7 @@ def logout():
 
 @app.route('/update_grade', methods=['POST'])
 def update_grade():
-    if session.get('role') != 'teacher':
+    if session.get('role') != 'teacher' and session.get('role') != 'admin':
         return {'status': 'error', 'message': 'Недостатньо прав'}, 403
 
     try:
@@ -411,7 +411,7 @@ def update_grade():
 
 @app.route('/delete_grade', methods=['POST'])
 def delete_grade():
-    if session.get('role') != 'teacher':
+    if session.get('role') != 'teacher' and session.get('role') != 'admin':
         return {'status': 'error', 'message': 'Недостатньо прав'}, 403
 
     try:
