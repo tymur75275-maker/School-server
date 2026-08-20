@@ -2,12 +2,316 @@
 <html lang="uk">
 <head>
     <meta charset="UTF-8">
-    <title>Панель Адміністратора</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Кабінет вчителя</title>
+    <style>
+        body {max-width: 1200px, font-family: Arial, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; }
+        .container { width: 100%, max-width: 1200px, background: #ff0018; margin: 0 auto; padding: 25px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 20px; }
+        .btn-logout { background: #dc3545; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px; }
+        .section { margin-bottom: 30px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background: #f8f9fa; }
+        .form-group { margin-bottom: 15px; }
+        label { font-weight: bold; display: block; margin-bottom: 5px; }
+        select, input[type="text"], input[type="number"], input[type="date"] { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        .student-row { display: flex; align-items: center; gap: 15px; margin-bottom: 10px; background: #f9f9f9; padding: 10px; border-radius: 6px; }
+        .btn-submit { background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        .btn-submit:hover { background: #218838; }
+        /* Вкладки предметів */
+        .tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid #ddd; }
+        .tab-btn { padding: 10px 18px; background: #e9ecef; border: none; border-radius: 6px 6px 0 0; cursor: pointer; text-decoration: none; color: #333; font-weight: bold; }
+        .tab-btn.active { background: #007bff; color: white; }
+        
+        /* Кольори статусів клітинок */
+        .cell-grade { cursor: pointer; border-radius: 4px; padding: 6px; display: block; font-weight: bold; transition: background 0.2s; }
+        .status-present { background-color: #d4edda; color: #155724; }     /* Присутній - зелений */
+        .status-absent { background-color: #f8d7da; color: #721c24; }      /* Не присутній - червоний */
+        .status-retake { background-color: #fff3cd; color: #856404; }      /* Перездача - жовтий/помаранчевий */
+        .status-postponed { background-color: #d1ecf1; color: #0c5460; }   /* Відстрочка - блакитний */
+        
+        /* Модальне вікно (Панелька) */
+        .modal-overlay { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: white; padding: 25px; border-radius: 8px; width: 400px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .modal-header { font-size: 18px; font-weight: bold; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+        .btn-close { background: #6c757d; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; }
+        .btn-delete { background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; }
+        .btn-delete:hover { background: #c82333; }
+    </style>
 </head>
 <body>
-    <h1>Кабінет Адміністратора</h1>
-    <p>Вітаємо, {{ session['user'] }}!</p>
-    <hr>
-    <!-- Тут можна додати керування користувачами, предметами та оцінками -->
+    <div class="container">
+        <div class="header">
+            <h2>Кабінет вчителя</h2>
+            <span style="margin-right: 15px; font-weight: bold;">{{ email }}</span>
+            <a href="{{ url_for('logout') }}" class="btn-logout">Вийти</a>
+        </div>
+
+        <!-- Секція 1: Журнал оцінок з перемикачем предметів -->
+        <div class="section">
+            <h3>Журнал оцінок</h3>
+
+            {% if teacher_subjects %}
+                <div class="tabs">
+                    {% for subj in teacher_subjects %}
+                        <a href="{{ url_for('teacher_dashboard', subject_id=subj.id) }}" 
+                           class="tab-btn {% if subj.id == selected_subject_id %}active{% endif %}">
+                            {{ subj.name }}
+                        </a>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p style="color: red;">За вашим Email не знайдено закріплених предметів.</p>
+            {% endif %}
+
+            {% if matrix and matrix_students %}
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Учень / Дата</th>
+                                {% for dt in matrix_dates %}
+                                    <th>{{ dt }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for st in matrix_students %}
+                                <tr>
+                                    <td><strong>{{ st }}</strong></td>
+                                    {% for dt in matrix_dates %}
+                                        {% set g_list = matrix[st][dt] %}
+                                        <td style="text-align: center; vertical-align: middle; cursor: pointer;" 
+                                        onclick="openTeacherModal('', '{{ st }}', '', 'Присутній', '', '{{ dt }}', '{{ selected_subject_id }}')">
+                                        {% if g_list %}
+                                            {% for g in g_list %}
+                                                {% set cls = 'status-present' if g.status == 'Присутній' else ('status-absent' if g.status == 'Не присутній' else ('status-retake' if g.status == 'Перездача' else 'status-postponed')) %}
+                                                <div class="cell-grade {{ cls }}" 
+                                                     onclick="event.stopPropagation(); openTeacherModal('{{ g.id }}', '{{ st }}', '{{ g.grade or '' }}', '{{ g.status }}', '{{ g.comment }}', '{{ dt }}', '{{ selected_subject_id }}')">
+                                                    {{ g.grade if g.grade else g.status }}
+                                                </div>
+                                            {% endfor %}
+                                        {% else %}
+                                            <span style="color: #ccc; display: block; width: 100%; height: 100%;">—</span>
+                                        {% endif %}
+                                    </td>
+                                    {% endfor %}
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p>Записів у журналі за цим предметом поки немає.</p>
+            {% endif %}
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;">
+
+        <!-- Секція 2: Форма виставлення оцінок -->
+        <div class="section">
+            <h3>Виставити оцінки</h3>
+            <form action="{{ url_for('add_grade') }}" method="POST">
+                
+                <div class="form-group">
+                    <label for="grade_date">Оберіть дату уроку:</label>
+                    <input type="date" id="grade_date" name="grade_date" value="{{ today_date }}" max="{{ today_date }}" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="subject_id">Оберіть предмет:</label>
+                    <select name="subject_id" id="subject_id" required>
+                        {% for subj in teacher_subjects %}
+                            <option value="{{ subj.id }}" {% if subj.id == selected_subject_id %}selected{% endif %}>
+                                {{ subj.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <h4>Список учнів:</h4>
+                {% for st_id, st_name, st_class in students %}
+                    <div class="student-row">
+                        <input type="checkbox" name="student_ids[]" value="{{ st_id }}" id="st_{{ st_id }}">
+                        <label for="st_{{ st_id }}" style="width: 220px; font-weight: normal; margin: 0;">
+                            <strong>{{ st_name }}</strong> ({{ st_class }} клас)
+                        </label>
+
+                        <select name="status_{{ st_id }}">
+                            <option value="Присутній">Присутній</option>
+                            <option value="Не присутній">Не присутній</option>
+                            <option value="Перездача">Перездача</option>
+                            <option value="Відстрочка">Відстрочка</option>
+                        </select>
+
+                        <input type="number" name="grade_{{ st_id }}" min="1" max="12" placeholder="Оцінка (1-12)">
+                        <input type="text" name="comment_{{ st_id }}" placeholder="Коментар" style="flex-grow: 1;">
+                    </div>
+                {% endfor %}
+
+                <button type="submit" class="btn-submit" style="margin-top: 15px;">Зберегти оцінки</button>
+            </form>
+        </div>
+    </div>
+        <!-- Модальне вікно редагування оцінки -->
+    <div id="teacherModal" class="modal-overlay">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeTeacherModal()">&times;</span>
+            <div class="modal-header">Редагувати оцінку (<span id="modalStudentName"></span>)</div>
+            <form id="editGradeForm" onsubmit="saveGradeChange(event)">
+                <input type="hidden" id="modalRecordId">
+                
+                <div class="form-group">
+                    <label>Предмет:</label>
+                    <select id="modalSubject" required>
+                        {% for subj in teacher_subjects %}
+                            <option value="{{ subj.id }}">{{ subj.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+    
+                <div class="form-group">
+                    <label>Дата:</label>
+                    <input type="date" id="modalDate" required>
+                </div>
+    
+                <div class="form-group">
+                    <label>Статус:</label>
+                    <select id="modalStatus" onchange="toggleModalGradeInput()">
+                        <option value="Присутній">Присутній</option>
+                        <option value="Не присутній">Не присутній</option>
+                        <option value="Перездача">Перездача</option>
+                        <option value="Відстрочка">Відстрочка</option>
+                    </select>
+                </div>
+    
+                <div class="form-group">
+                    <label>Оцінка (1-12):</label>
+                    <input type="number" id="modalGrade" min="1" max="12">
+                </div>
+    
+                <div class="form-group">
+                    <label>Коментар вчителя:</label>
+                    <input type="text" id="modalComment" style="width: 100%;">
+                </div>
+    
+                <div class="modal-actions" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                    <button type="button" id="btnDeleteRecord" class="btn-delete" onclick="deleteGradeRecord()">Видалити</button>
+                        <div>
+                            <button type="button" class="btn-close" onclick="closeTeacherModal()">Скасувати</button>
+                            <button type="submit" class="btn-submit">Зберегти</button>
+                        </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <script>
+    // Автоматичне вимкнення поля оцінки при виборі "Не присутній" у нижній формі
+    document.querySelectorAll('.student-row select').forEach(selectEl => {
+        selectEl.addEventListener('change', function() {
+            const row = this.closest('.student-row');
+            const gradeInput = row.querySelector('input[type="number"]');
+            if (this.value === 'Не присутній') {
+                gradeInput.value = '';
+                gradeInput.disabled = true;
+            } else {
+                gradeInput.disabled = false;
+            }
+        });
+    });
+    
+    function toggleModalGradeInput() {
+        const status = document.getElementById('modalStatus').value;
+        const gradeInput = document.getElementById('modalGrade');
+        if (status === 'Не присутній') {
+            gradeInput.value = '';
+            gradeInput.disabled = true;
+        } else {
+            gradeInput.disabled = false;
+        }
+    }
+    
+    function openTeacherModal(id, student, grade, status, comment, dt, subjectId) {
+        document.getElementById('modalRecordId').value = id;
+        document.getElementById('modalStudentName').innerText = student;
+        document.getElementById('modalGrade').value = grade;
+        document.getElementById('modalStatus').value = status;
+        document.getElementById('modalComment').value = comment;
+        document.getElementById('modalDate').value = dt;
+        document.getElementById('modalSubject').value = subjectId;
+    
+        toggleModalGradeInput();
+        document.getElementById('teacherModal').style.display = 'flex';
+    }
+    
+    function closeTeacherModal() {
+        document.getElementById('teacherModal').style.display = 'none';
+    }
+    
+    function saveGradeChange(e) {
+        e.preventDefault();
+        const recordId = document.getElementById('modalRecordId').value;
+        const formData = new FormData();
+    
+        formData.append('record_id', recordId);
+        formData.append('grade', document.getElementById('modalGrade').value);
+        formData.append('status', document.getElementById('modalStatus').value);
+        formData.append('comment', document.getElementById('modalComment').value);
+        formData.append('date', document.getElementById('modalDate').value);
+        formData.append('subject_id', document.getElementById('modalSubject').value);
+        formData.append('student_name', document.getElementById('modalStudentName').innerText);
+
+        // Якщо recordId є — це ОНОВЛЕННЯ, якщо немає — це СТВОРЕННЯ нової оцінки
+        const endpoint = recordId ? '/update_grade' : '/add_single_grade';
+    
+        fetch(endpoint, {
+            method: 'POST',
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.status === 'success') {
+                window.location.reload();
+            } else {
+                alert('Помилка збереження: ' + data.message);
+            }
+        });
+    }
+    function deleteGradeRecord() {
+        const recordId = document.getElementById('modalRecordId').value;
+    
+        if (!recordId) return;
+
+        if (confirm('Ви дійсно бажаєте видалити цю оцінку?')) {
+            const formData = new FormData();
+            formData.append('record_id', recordId);
+
+            fetch('/delete_grade', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    window.location.reload();
+                } else {
+                    alert('Помилка видалення: ' + data.message);
+                }
+            });
+        }
+    }
+    // Закриття при кліку поза межами вікна (на темний фон/overlay)
+window.addEventListener('click', function(event) {
+  const modal = document.getElementById('teacherModal');
+  if (event.target === modal) {
+    closeTeacherModal();
+  }
+});
+
+
+    </script>
 </body>
 </html>
