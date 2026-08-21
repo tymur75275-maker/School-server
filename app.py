@@ -40,7 +40,8 @@ def login():
             return redirect(url_for('admin_page'))
         elif role == 'teacher':
             return redirect(url_for('teacher_dashboard'))
-        return redirect(url_for('student_dashboard'))
+        else:
+            return redirect(url_for('student_dashboard'))
 
     error = None
     if request.method == 'POST':
