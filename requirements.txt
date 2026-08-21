@@ -1,3 +1,6 @@
 Flask
 gunicorn
 pyairtable
+Flask-Mail
+itsdangerous
+Werkzeug

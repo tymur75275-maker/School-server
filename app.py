@@ -1,10 +1,22 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
 from pyairtable import Api
 from datetime import date
+from flask_mail import Mail, Message
+from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadTimeSignature
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'default_secret_key_for_dev')
+
+app.config['MAIL_SERVER'] = 'smtp.gmail.com'
+app.config['MAIL_PORT'] = 587
+app.config['MAIL_USE_TLS'] = True
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
+
+mail = Mail(app)
+serializer = URLSafeTimedSerializer(app.secret_key)
 
 # Отримуємо ключі з змінних оточення Render
 AIRTABLE_API_KEY = os.environ.get('AIRTABLE_API_KEY')
@@ -28,7 +40,10 @@ def home():
     if 'user' in session:
         if session['role'] == 'teacher':
             return redirect(url_for('teacher_dashboard'))
-        return redirect(url_for('student_dashboard'))
+        elif session['role'] == 'admin':
+            return redirect(url_for('admin_page'))
+        else:
+            return redirect(url_for('student_dashboard'))
     return redirect(url_for('login'))
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -378,6 +393,68 @@ def teacher_dashboard():
         today_date=today_str,
         email=teacher_email
     )
+
+
+
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip()
+        
+        # Шукаємо користувача в Airtable за Email
+        records = users_table.all(formula=f"{{Email}} = '{email}'")
+        if records:
+            user = records[0]
+            user_id = user['id']
+            
+            # Генеруємо токен із зашифрованим ID користувача
+            token = serializer.dumps(user_id, salt='password-reset-salt')
+            reset_url = url_for('reset_password', token=token, _external=True)
+            
+            # Формуємо та надсилаємо лист
+            msg = Message("Скидання пароля", recipients=[email])
+            msg.body = f"Вітаємо! Для скидання пароля перейдіть за цим посиланням: {reset_url}\n\nПосилання дійсне протягом 30 хвилин."
+            try:
+                mail.send(msg)
+                flash('Лист із інструкціями для скидання пароля надіслано на вашу пошту.', 'success')
+            except Exception as e:
+                flash('Помилка при надсиланні листа. Перевірте конфігурацію пошти.', 'danger')
+        else:
+            # Із міркувань безпеки кажемо те саме, щоб не розкривати наявність пошти в базі
+            flash('Якщо цей Email зареєстрований у системі, ви отримаєте лист із інструкціями.', 'info')
+            
+        return redirect(url_for('login'))
+        
+    return render_template('forgot_password.html')
+
+
+@app.route('/reset-password/<token>', methods=['GET', 'POST'])
+def reset_password(token):
+    try:
+        # Перевіряємо токен (максимальний час дії — 1800 секунд / 30 хвилин)
+        user_id = serializer.loads(token, salt='password-reset-salt', max_age=1800)
+    except (SignatureExpired, BadTimeSignature):
+        flash('Посилання для скидання пароля недійсне або його термін дії закінчився.', 'danger')
+        return redirect(url_for('forgot_password'))
+
+    if request.method == 'POST':
+        new_password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+
+        if not new_password or new_password != confirm_password:
+            flash('Паролі не збігаються!', 'danger')
+            return render_template('reset_password.html', token=token)
+
+        
+        users_table.update(user_id, {'Password': new_password})
+
+        flash('Ваш пароль успішно змінено! Тепер ви можете увійти.', 'success')
+        return redirect(url_for('login'))
+
+    return render_template('reset_password.html', token=token)
+
+
 
 @app.route('/add_grade', methods=['POST'])
 def add_grade():
