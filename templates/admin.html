@@ -82,7 +82,7 @@
                             {{ assigned_names|join(', ') if assigned_names else '<em style="color:#888;">Немає предметів</em>'|safe }}
                         </td>
                         <td>
-                            <button type="button" class="btn-assign" onclick="openAssignModal('{{ t.id }}', '{{ t.name }}', {{ t.assigned_subject_ids|tojson }})">
+                            <button type="button" class="btn-assign" onclick="openAssignModal('{{ t.id }}', '{{ t.name|escape }}', {{ t.assigned_subject_ids|tojson|forceescape }})">
                                 Налаштувати
                             </button>
                         </td>
@@ -325,8 +325,11 @@
         document.getElementById('assignTeacherId').value = teacherId;
         document.getElementById('assignTeacherName').innerText = teacherName;
 
+        // Перетворюємо всі елементи масиву на рядки для коректного порівняння з cb.value
+        const idsArray = Array.isArray(assignedSubjIds) ? assignedSubjIds.map(String) : [];
+
         document.querySelectorAll('.subj-checkbox').forEach(cb => {
-            cb.checked = assignedSubjIds.includes(cb.value);
+            cb.checked = idsArray.includes(String(cb.value));
         });
 
         document.getElementById('assignModal').style.display = 'flex';

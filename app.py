@@ -171,10 +171,11 @@ def admin_page():
             t_id = u['id']
             t_name = clean_value(uf.get('Full Name')) or clean_value(uf.get('Email'))
             t_email = clean_value(uf.get('Email'))
-            # Отримуємо ID предметів, зв'язаних з цим вчителем
+            # Отримуємо ID предметів, перетворюючи всі елементи на рядки
             t_subjs = uf.get('Предмети', [])
             if not isinstance(t_subjs, list):
                 t_subjs = [t_subjs] if t_subjs else []
+            t_subjs = [str(sid) for sid in t_subjs if sid]
 
             teachers_list.append({
                 'id': t_id,
