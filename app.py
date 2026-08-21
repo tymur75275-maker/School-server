@@ -218,6 +218,69 @@ def assign_subject():
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+
+
+@app.route('/student')
+def student_dashboard():
+    if session.get('role') != 'student':
+        return redirect(url_for('login'))
+    
+    student_email = str(session.get('user', '')).strip().lower()
+
+    # 1. Знаходимо ім'я учня за його Email з таблиці "Users" або "Учні"
+    user_records = users_table.all(formula=f"LOWER({{Email}}) = '{student_email}'")
+    student_name = None
+    if user_records:
+        student_name = clean_value(user_records[0]['fields'].get('Full Name'))
+
+    # 2. Отримуємо всі оцінки для цього учня
+    all_grades = grades_table.all()
+    subjects_set = set()
+    dates_set = set()
+    raw_grades = []
+
+    for rec in all_grades:
+        f = rec['fields']
+        st_name = clean_value(f.get("Ім'я учня"))
+        
+        # Перевіряємо за іменем учня або за Email учня
+        rec_email = str(clean_value(f.get('Email учня')) or '').strip().lower()
+        if (student_name and str(st_name).strip() == str(student_name).strip()) or rec_email == student_email:
+            subj_name = clean_value(f.get('Назва предмета')) or clean_value(f.get('Предмет'))
+            dt_val = clean_value(f.get('Дата виставлення оцінки')) or clean_value(f.get('Дата')) or 'Без дати'
+            grade = clean_value(f.get('Оцінка'))
+            status = clean_value(f.get('Статус'))
+            comment = clean_value(f.get('Коментар вчителя'))
+
+            if subj_name:
+                subjects_set.add(str(subj_name))
+                dates_set.add(str(dt_val))
+                raw_grades.append({
+                    'subject': str(subj_name),
+                    'date': str(dt_val),
+                    'grade': grade,
+                    'status': status or 'Присутній',
+                    'comment': comment or ''
+                })
+
+    subjects_list = sorted(list(subjects_set))
+    dates_list = sorted(list(dates_set))
+
+    # Формуємо матрицю: matrix[subject][date] = grade_object
+    matrix = {sb: {dt: None for dt in dates_list} for sb in subjects_list}
+    for g in raw_grades:
+        matrix[g['subject']][g['date']] = g
+
+    return render_template(
+        'student.html',
+        matrix=matrix,
+        subjects=subjects_list,
+        dates=dates_list,
+        email=student_email
+    )
+
+
+
 @app.route('/teacher')
 def teacher_dashboard():
     if session.get('role') != 'teacher':
