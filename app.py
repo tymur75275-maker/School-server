@@ -102,6 +102,11 @@ def admin_page():
 
     admin_email = session['user']
 
+    users = users_table.all()
+    students = students_table.all()
+    subjects = subjects_table.all()
+    grades = grades_table.all()
+
     # 1. Отримуємо ВСІ предмети для адміна (не за фільтром вчителя)
     all_subjects_records = subjects_table.all()
     all_subjects = []
@@ -212,7 +217,9 @@ def admin_page():
         students=students_list,
         teachers=teachers_list,
         today_date=today_str,
-        email=admin_email
+        email=admin_email,
+        users=users,
+        grades=grades
     )
 
 @app.route('/admin/assign_subject', methods=['POST'])
@@ -395,6 +402,114 @@ def teacher_dashboard():
     )
 
 
+
+@app.route('/admin/create_user', methods=['POST'])
+def admin_create_user():
+    if session.get('role') != 'admin':
+        return jsonify({'status': 'error', 'message': 'Forbidden'}), 403
+
+    data = request.json
+    full_name = data.get('full_name')
+    email = data.get('email')
+    role = data.get('role')  # 'admin', 'teacher', або 'child'
+    password = data.get('password')
+    class_name = data.get('class_name')  # Якщо створюємо учня
+
+    if not full_name or not email or not role or not password:
+        return jsonify({'status': 'error', 'message': 'Усі обов’язкові поля мають бути заповнені'}), 400
+
+    # 1. Створюємо запис у таблиці Users
+    user_fields = {
+        'Full Name': full_name,
+        'Email': email,
+        'Role': role,
+        'Password': password
+    }
+    new_user = users_table.create(user_fields)
+    user_id = new_user['id']
+
+    # 2. Якщо роль 'child' (учень) — створюємо додатково запис у таблиці 'Учні'
+    if role == 'child':
+        student_fields = {
+            'Ім\'я учня': full_name,
+            'Учень': [user_id]
+        }
+        if class_name:
+            student_fields['Клас'] = class_name
+        students_table.create(student_fields)
+
+    return jsonify({'status': 'success', 'user': new_user})
+
+
+
+
+@app.route('/admin/update_user', methods=['POST'])
+def admin_update_user():
+    if session.get('role') != 'admin':
+        return jsonify({'status': 'error', 'message': 'Forbidden'}), 403
+
+    data = request.json
+    user_id = data.get('user_id')
+    full_name = data.get('full_name')
+    email = data.get('email')
+    role = data.get('role')
+    password = data.get('password')
+
+    if not user_id:
+        return jsonify({'status': 'error', 'message': 'Відсутній ID користувача'}), 400
+
+    update_fields = {}
+    if full_name:
+        update_fields['Full Name'] = full_name
+    if email:
+        update_fields['Email'] = email
+    if role:
+        update_fields['Role'] = role
+    if password:  # Пароль оновлюємо тільки якщо його ввели в формі
+        update_fields['Password'] = password
+
+    updated_user = users_table.update(user_id, update_fields)
+    return jsonify({'status': 'success', 'user': updated_user})
+
+
+
+@app.route('/admin/delete_user', methods=['POST'])
+def admin_delete_user():
+    if session.get('role') != 'admin':
+        return jsonify({'status': 'error', 'message': 'Forbidden'}), 403
+
+    data = request.json
+    user_id = data.get('user_id')
+
+    if not user_id:
+        return jsonify({'status': 'error', 'message': 'Відсутній ID користувача'}), 400
+
+    # Шукаємо та видаляємо пов'язаний запис з таблиці 'Учні' (якщо є)
+    students = students_table.all()
+    for st in students:
+        linked_users = st['fields'].get('Учень', [])
+        if user_id in linked_users:
+            students_table.delete(st['id'])
+            break
+
+    # Видаляємо запис з таблиці 'Users'
+    users_table.delete(user_id)
+
+    return jsonify({'status': 'success'})
+
+
+@app.route('/admin/create_subject', methods=['POST'])
+def create_subject():
+    if session.get('role') != 'admin':
+        return jsonify({'status': 'error', 'message': 'Доступ заборонено'}), 403
+
+    name = request.form.get('name')
+    if not name:
+        return jsonify({'status': 'error', 'message': 'Введіть назву предмета'}), 400
+
+    # Запис у таблицю 'Предмети' (поле 'Назва предмета')
+    subjects_table.create({'Назва предмета': name})
+    return jsonify({'status': 'success'})
 
 
 @app.route('/forgot-password', methods=['GET', 'POST'])

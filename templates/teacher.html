@@ -304,13 +304,21 @@
         }
     }
     // Закриття при кліку поза межами вікна (на темний фон/overlay)
-window.addEventListener('click', function(event) {
-  const modal = document.getElementById('teacherModal');
-  if (event.target === modal) {
-    closeTeacherModal();
-  }
-});
+    window.addEventListener('click', function(event) {
+        const modal = document.getElementById('teacherModal');
+        if (event.target === modal) {
+            closeTeacherModal();
+      }
+    });
 
+    // Авто-вибір чекбокса учня при зміні його оцінки або статусу
+    document.querySelectorAll('.student-row input, .student-row select').forEach(input => {
+       input.addEventListener('input', function() {
+           const row = this.closest('.student-row');
+           const checkbox = row.querySelector('input[type="checkbox"]');
+           checkbox.checked = true;
+       });
+    });
 
     </script>
 </body>
