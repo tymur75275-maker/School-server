@@ -539,12 +539,27 @@
         const role = document.getElementById('new_user_role').value;
         const userClass = document.getElementById('new_user_class').value;
 
+
+
         const formData = new FormData();
-        formData.append('full_name', fullName);
+        <!-- formData.append('full_name', fullName);
         formData.append('email', email);
         formData.append('password', password);
         formData.append('role', role);
         formData.append('user_class', userClass);
+        -->
+
+        fetch('/admin/create_user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                full_name: fullName,
+                email: email,
+                password: password,
+                role: role,
+                class_name: userClass
+            })
+        })
 
         fetch('/admin/create_user', {
             method: 'POST',
