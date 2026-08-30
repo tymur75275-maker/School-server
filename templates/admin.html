@@ -102,6 +102,27 @@
                 </form>
             </div>
 
+            <!-- Список предметів та користувачів -->
+            <div style="margin-top: 30px;">
+                <h3>Існуючі предмети</h3>
+                    <ul>
+                        {% for subject in subjects %}
+                            <li>{{ subject.fields.get('Name') }}</li>
+                        {% else %}
+                            <li>Предметів поки немає</li>
+                        {% endfor %}
+                    </ul>
+
+                <h3>Існуючі користувачі</h3>
+                <ul>
+                    {% for user in users %}
+                        <li>{{ user.fields.get('Full Name') }} ({{ user.fields.get('Role') }})</li>
+                    {% else %}
+                        <li>Користувачів поки немає</li>
+                    {% endfor %}
+                </ul>
+            </div>
+
             <!-- Створення класу 
             <div style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
                 <h4 style="margin-top: 0;">Створити клас</h4>
