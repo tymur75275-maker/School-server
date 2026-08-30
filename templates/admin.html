@@ -48,7 +48,7 @@
 <body>
     <div class="container">
         <div class="header">
-            <h2>Панель Адміністратора <span class="admin-badge">Admin</span></h2>
+            <h2>Кабінет Адміністратора <span class="admin-badge">Admin</span></h2>
             <div>
                 <span style="margin-right: 15px; font-weight: bold;">{{ email }}</span>
                 <a href="{{ url_for('logout') }}" class="btn-logout">Вийти</a>
@@ -107,7 +107,7 @@
                 <h3>Існуючі предмети</h3>
                     <ul>
                         {% for subject in subjects %}
-                            <li>{{ subject.fields.get('Name') }}</li>
+                            <li>{{ subject.fields.get('Назва предмета') }}</li>
                         {% else %}
                             <li>Предметів поки немає</li>
                         {% endfor %}
