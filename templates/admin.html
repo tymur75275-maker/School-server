@@ -125,7 +125,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for userin users %}
+                            {% for user in users %}
                                 <tr>
                                     <td><strong>{{ user.fields.get('Full Name') or '—' }}</strong></td>
                                     <td>{{ user.fields.get('Email') or '—' }}</td>
