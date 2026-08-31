@@ -122,6 +122,7 @@
                                 <th>Логін (Email)</th>
                                 <th>Пароль</th>
                                 <th>Роль</th>
+                                <th>Дії</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -134,6 +135,14 @@
                                         <span class="admin-badge" style="background: #17a2b8;">
                                             {{ user.fields.get('Role') or '—' }}
                                         </span>
+                                    </td>
+                                    <td>
+                                        <button onclick="editUser('{{ user.id }}', '{{ user.fields.get('Full Name', '') }}', '{{ user.fields.get('Email', '') }}', '{{ user.fields.get('Role', '') }}')">
+                                            ✏️ Редагувати
+                                        </button>
+                                        <button onclick="deleteUser('{{ user.id }}')" style="background: #dc3545; color: white;">
+                                            🗑️ Видалити
+                                        </button>
                                     </td>
                                 </tr>
                             {% else %}
