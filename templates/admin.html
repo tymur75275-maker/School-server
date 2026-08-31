@@ -114,13 +114,36 @@
                     </ul>
 
                 <h3>Існуючі користувачі</h3>
-                <ul>
-                    {% for user in users %}
-                        <li>{{ user.fields.get('Full Name') }} ({{ user.fields.get('Role') }})</li>
-                    {% else %}
-                        <li>Користувачів поки немає</li>
-                    {% endfor %}
-                </ul>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Ім'я (Full Name)</th>
+                                <th>Логін (Email)</th>
+                                <th>Пароль</th>
+                                <th>Роль</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for userin users %}
+                                <tr>
+                                    <td><strong>{{ user.fields.get('Full Name') or '—' }}</strong></td>
+                                    <td>{{ user.fields.get('Email') or '—' }}</td>
+                                    <td><code>{{ user.fields.get('Password') or '—' }}</code></td>
+                                    <td>
+                                        <span class="admin-badge" style="background: #17a2b8;">
+                                            {{ user.fields.get('Role') or '—' }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            {% else %}
+                                <tr>
+                                    <td colspan="4" style="text-align: center; color: #888;">Користувачів поки немає</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
             </div>
 
             <!-- Створення класу 
