@@ -603,11 +603,11 @@
 
     function createUser(e) {
         e.preventDefault();
-        const fullName = document.getElementById('new_user_name').value;
+        const full_name = document.getElementById('new_user_name').value;
         const email = document.getElementById('new_user_email').value;
         const password = document.getElementById('new_user_password').value;
         const role = document.getElementById('new_user_role').value;
-        const userClass = document.getElementById('new_user_class').value;
+        const class_name = document.getElementById('new_user_class').value;
 
 
 
@@ -616,18 +616,18 @@
         formData.append('email', email);
         formData.append('password', password);
         formData.append('role', role);
-        formData.append('user_class', userClass);
+        formData.append('class_name', class_name);
         -->
 
         fetch('/admin/create_user', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                full_name: fullName,
+                full_name: full_name,
                 email: email,
                 password: password,
                 role: role,
-                class_name: userClass
+                class_name: class_name
             })
         })
 
