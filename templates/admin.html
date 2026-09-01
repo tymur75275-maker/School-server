@@ -137,7 +137,7 @@
                                         </span>
                                     </td>
                                     <td>
-                                        <button onclick="editUser('{{ user.id }}', '{{ user.fields.get('Full Name', '') }}', '{{ user.fields.get('Email', '') }}', '{{ user.fields.get('Role', '') }}')">
+                                        <button onclick="openEditModal('{{ user.id }}', '{{ user.fields.get('Full Name', '') }}', '{{ user.fields.get('Email', '') }}', '{{ user.fields.get('Role', '') }}')">
                                             ✏️ Редагувати
                                         </button>
                                         <button onclick="deleteUser('{{ user.id }}')" style="background: #dc3545; color: white;">
