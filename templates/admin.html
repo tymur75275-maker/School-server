@@ -55,120 +55,7 @@
             </div>
         </div>
 
-        <!-- Секції управління довідниками (Створення предметів, користувачів, класів) -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 35px;">
-            
-            <!-- Створення предмету -->
-            <div style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-                <h4 style="margin-top: 0;">Додати предмет</h4>
-                <form id="createSubjectForm" onsubmit="createSubject(event)">
-                    <div class="form-group">
-                        <label for="new_subject_name">Назва предмета:</label>
-                        <input type="text" id="new_subject_name" style="width: 100%; box-sizing: border-box;" placeholder="Наприклад: Фізика" required>
-                    </div>
-                    <button type="submit" class="btn-submit" style="width: 100%;">Створити предмет</button>
-                </form>
-            </div>
-
-            <!-- Створення користувача -->
-            <div style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-                <h4 style="margin-top: 0;">Створити користувача</h4>
-                <form id="createUserForm" onsubmit="createUser(event)">
-                    <div class="form-group">
-                        <label for="new_user_name">ПІБ:</label>
-                        <input type="text" name="name" style="width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 4px;" placeholder="user@example.com" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="new_user_email">Email:</label>
-                        <input type="email" id="new_user_email" style="width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 4px;" placeholder="user@example.com" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="new_user_password">Пароль:</label>
-                        <input type="password" id="new_user_password" style="width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 4px;" placeholder="******" required>
-                    </div>
-                    <div class="form-group">
-                        <label for="new_user_role">Роль:</label>
-                        <select id="new_user_role" style="width: 100%;" onchange="toggleUserClassInput()" required>
-                            <option value="child">Учень</option>
-                            <option value="teacher">Вчитель</option>
-                            <option value="admin">Адміністратор</option>
-                        </select>
-                    </div>
-                    <div class="form-group" id="userClassGroup">
-                        <label for="new_user_class">Клас учня:</label>
-                        <input type="text" id="new_user_class" style="width: 100%; box-sizing: border-box;" placeholder="10-А">
-                    </div>
-                    <button type="submit" class="btn-submit" style="width: 100%;" onclick="createUser()">Створити користувача</button>
-                </form>
-            </div>
-
-            <!-- Список предметів та користувачів -->
-            <div style="margin-top: 30px;">
-                <h3>Існуючі предмети</h3>
-                    <ul>
-                        {% for subject in subjects %}
-                            <li>{{ subject.fields.get('Назва предмета') }}</li>
-                        {% else %}
-                            <li>Предметів поки немає</li>
-                        {% endfor %}
-                    </ul>
-
-                <h3>Існуючі користувачі</h3>
-                <div style="overflow-x: auto;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Ім'я (Full Name)</th>
-                                <th>Логін (Email)</th>
-                                <th>Пароль</th>
-                                <th>Роль</th>
-                                <th>Дії</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for user in users %}
-                                <tr>
-                                    <td><strong>{{ user.fields.get('Full Name') or '—' }}</strong></td>
-                                    <td>{{ user.fields.get('Email') or '—' }}</td>
-                                    <td><code>{{ user.fields.get('Password') or '—' }}</code></td>
-                                    <td>
-                                        <span class="admin-badge" style="background: #17a2b8;">
-                                            {{ user.fields.get('Role') or '—' }}
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <button onclick="openEditModal('{{ user.id }}', '{{ user.fields.get('Full Name', '') }}', '{{ user.fields.get('Email', '') }}', '{{ user.fields.get('Role', '') }}')">
-                                            ✏️ Редагувати
-                                        </button>
-                                        <button onclick="deleteUser('{{ user.id }}')" style="background: #dc3545; color: white;">
-                                            🗑️ Видалити
-                                        </button>
-                                    </td>
-                                </tr>
-                            {% else %}
-                                <tr>
-                                    <td colspan="4" style="text-align: center; color: #888;">Користувачів поки немає</td>
-                                </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Створення класу 
-            <div style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-                <h4 style="margin-top: 0;">Створити клас</h4>
-                <form id="createClassForm" onsubmit="createClass(event)">
-                    <div class="form-group">
-                        <label for="new_class_name">Назва класу:</label>
-                        <input type="text" id="new_class_name" style="width: 100%; box-sizing: border-box;" placeholder="Наприклад: 11-Б" required>
-                    </div>
-                    <button type="submit" class="btn-submit" style="width: 100%;">Створити клас</button>
-                </form>
-            </div>
-            -->
-
-        </div>
+        
 
         <!-- Секція 1: Керування предметами вчителів -->
         <div class="section" style="background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #e9ecef;">
@@ -315,6 +202,121 @@
             </form>
         </div>
     </div>
+
+    <!-- Секції управління довідниками (Створення предметів, користувачів, класів) -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 35px;">
+            
+            <!-- Створення предмету -->
+            <div style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                <h4 style="margin-top: 0;">Додати предмет</h4>
+                <form id="createSubjectForm" onsubmit="createSubject(event)">
+                    <div class="form-group">
+                        <label for="new_subject_name">Назва предмета:</label>
+                        <input type="text" id="new_subject_name" style="width: 100%; box-sizing: border-box;" placeholder="Наприклад: Фізика" required>
+                    </div>
+                    <button type="submit" class="btn-submit" style="width: 100%;">Створити предмет</button>
+                </form>
+            </div>
+
+            <!-- Створення користувача -->
+            <div style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                <h4 style="margin-top: 0;">Створити користувача</h4>
+                <form id="createUserForm" onsubmit="createUser(event)">
+                    <div class="form-group">
+                        <label for="new_user_name">ПІБ:</label>
+                        <input type="text" name="name" style="width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 4px;" placeholder="user@example.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="new_user_email">Email:</label>
+                        <input type="email" id="new_user_email" style="width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 4px;" placeholder="user@example.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="new_user_password">Пароль:</label>
+                        <input type="password" id="new_user_password" style="width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 4px;" placeholder="******" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="new_user_role">Роль:</label>
+                        <select id="new_user_role" style="width: 100%;" onchange="toggleUserClassInput()" required>
+                            <option value="child">Учень</option>
+                            <option value="teacher">Вчитель</option>
+                            <option value="admin">Адміністратор</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="userClassGroup">
+                        <label for="new_user_class">Клас учня:</label>
+                        <input type="text" id="new_user_class" style="width: 100%; box-sizing: border-box;" placeholder="10-А">
+                    </div>
+                    <button type="submit" class="btn-submit" style="width: 100%;">Створити користувача</button>
+                </form>
+            </div>
+
+            <!-- Список предметів та користувачів -->
+            <div style="margin-top: 30px;">
+                <h3>Існуючі предмети</h3>
+                    <ul>
+                        {% for subject in subjects %}
+                            <li>{{ subject.fields.get('Назва предмета') }}</li>
+                        {% else %}
+                            <li>Предметів поки немає</li>
+                        {% endfor %}
+                    </ul>
+
+                <h3>Існуючі користувачі</h3>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Ім'я (Full Name)</th>
+                                <th>Логін (Email)</th>
+                                <th>Пароль</th>
+                                <th>Роль</th>
+                                <th>Дії</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in users %}
+                                <tr>
+                                    <td><strong>{{ user.fields.get('Full Name') or '—' }}</strong></td>
+                                    <td>{{ user.fields.get('Email') or '—' }}</td>
+                                    <td><code>{{ user.fields.get('Password') or '—' }}</code></td>
+                                    <td>
+                                        <span class="admin-badge" style="background: #17a2b8;">
+                                            {{ user.fields.get('Role') or '—' }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <button onclick="openEditModal('{{ user.id }}', '{{ user.fields.get('Full Name', '') }}', '{{ user.fields.get('Email', '') }}', '{{ user.fields.get('Role', '') }}')">
+                                            ✏️ Редагувати
+                                        </button>
+                                        <button onclick="deleteUser('{{ user.id }}')" style="background: #dc3545; color: white;">
+                                            🗑️ Видалити
+                                        </button>
+                                    </td>
+                                </tr>
+                            {% else %}
+                                <tr>
+                                    <td colspan="4" style="text-align: center; color: #888;">Користувачів поки немає</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Створення класу 
+            <div style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                <h4 style="margin-top: 0;">Створити клас</h4>
+                <form id="createClassForm" onsubmit="createClass(event)">
+                    <div class="form-group">
+                        <label for="new_class_name">Назва класу:</label>
+                        <input type="text" id="new_class_name" style="width: 100%; box-sizing: border-box;" placeholder="Наприклад: 11-Б" required>
+                    </div>
+                    <button type="submit" class="btn-submit" style="width: 100%;">Створити клас</button>
+                </form>
+            </div>
+            -->
+
+        </div>
 
     <!-- Модальне вікно призначення предметів вчителю -->
     <div id="assignModal" class="modal-overlay">
