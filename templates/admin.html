@@ -393,6 +393,44 @@
             </form>
         </div>
     </div>
+
+    <!-- Модальне вікно редагування користувача -->
+    <div id="editUserModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center;">
+        <div style="background:#fff; padding:20px; border-radius:8px; width:100%; max-width:400px; box-shadow:0 4px 6px rgba(0,0,0,0.1);">
+            <h3 style="margin-top:0;">Редагувати користувача</h3>
+
+            <input type="hidden" id="edit_user_id">
+
+            <div style="margin-bottom:12px;">
+                <label style="display:block; margin-bottom:4px; font-weight:bold;">Повне ім'я:</label>
+                <input type="text" id="edit_full_name" style="width:100%; padding:8px; box-sizing:border-box;">
+            </div>
+
+            <div style="margin-bottom:12px;">
+                <label style="display:block; margin-bottom:4px; font-weight:bold;">Email (Логін):</label>
+                <input type="email" id="edit_email" style="width:100%; padding:8px; box-sizing:border-box;">
+            </div>
+
+            <div style="margin-bottom:12px;">
+                <label style="display:block; margin-bottom:4px; font-weight:bold;">Роль:</label>
+                <select id="edit_role" style="width:100%; padding:8px; box-sizing:border-box;">
+                    <option value="admin">Admin</option>
+                    <option value="teacher">Teacher</option>
+                    <option value="child">Child (Учень)</option>
+                </select>
+            </div>
+
+            <div style="margin-bottom:16px;">
+                <label style="display:block; margin-bottom:4px; font-weight:bold;">Новий пароль (необов'язково):</label>
+                <input type="text" id="edit_password" placeholder="Залиште порожнім, щоб не змінювати" style="width:100%; padding:8px; box-sizing:border-box;">
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:8px;">
+                <button type="button" onclick="closeEditModal()" style="padding:8px 16px; background:#6c757d; color:#fff; border:none; border-radius:4px; cursor:pointer;">Скасувати</button>
+                <button type="button" onclick="saveUserChanges()" style="padding:8px 16px; background:#28a745; color:#fff; border:none; border-radius:4px; cursor:pointer;">Зберегти</button>
+            </div>
+        </div>
+    </div>
     
     <script>
     document.querySelectorAll('.student-row select').forEach(selectEl => {
@@ -644,6 +682,119 @@
             checkbox.checked = true;
         });
     });
+
+    // Видалення користувача через /admin/delete_user
+    function deleteUser(userId) {
+        if (!confirm('Ви впевнені, що хочете видалити цього користувача?')) return;
+
+        fetch('/admin/delete_user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: userId })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                location.reload();
+            } else {
+                alert('Помилка видалення: ' + data.message);
+        }
+        });
+    }
+
+// Редагувати користувача (швидкий варіант через prompt)
+    function editUser(userId, currentName, currentEmail, currentRole) {
+        const newName = prompt("Введіть нове ім'я:", currentName);
+        if (newName === null) return;
+
+        const newEmail = prompt("Введіть новий Email:", currentEmail);
+        if (newEmail === null) return;
+
+        const newRole = prompt("Введіть роль (admin, teacher, child):", currentRole);
+        if (newRole === null) return;
+
+        const newPassword = prompt("Введіть новий пароль (залиште порожнім, щоб не змінювати):", "");
+
+        const payload = {
+            user_id: userId,
+            full_name: newName,
+            email: newEmail,
+            role: newRole
+        };
+        if (newPassword) payload.password = newPassword;
+
+        fetch('/admin/update_user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                location.reload();
+            } else {
+                alert('Помилка оновлення: ' + data.message);
+            }
+        });
+    }
+
+    // Відкриття модального вікна з заповненням даних
+function openEditModal(userId, currentName, currentEmail, currentRole) {
+    document.getElementById('edit_user_id').value = userId;
+    document.getElementById('edit_full_name').value = currentName;
+    document.getElementById('edit_email').value = currentEmail;
+    document.getElementById('edit_role').value = currentRole.toLowerCase();
+    document.getElementById('edit_password').value = ''; // очищаємо поле пароля
+
+    document.getElementById('editUserModal').style.display = 'flex';
+}
+
+// Закриття модалки
+    function closeEditModal() {
+        document.getElementById('editUserModal').style.display = 'none';
+    }
+
+// Збереження змін через POST-запит до /admin/update_user
+    function saveUserChanges() {
+        const userId = document.getElementById('edit_user_id').value;
+        const fullName = document.getElementById('edit_full_name').value.trim();
+        const email = document.getElementById('edit_email').value.trim();
+        const role = document.getElementById('edit_role').value;
+        const password = document.getElementById('edit_password').value.trim();
+
+        if (!fullName || !email) {
+            alert("Ім'я та Email не можуть бути порожніми!");
+            return;
+        }
+
+        const payload = {
+            user_id: userId,
+            full_name: fullName,
+            email: email,
+            role: role
+        };
+
+        if (password) {
+            payload.password = password;
+        }
+
+        fetch('/admin/update_user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                location.reload();
+            } else {
+                alert('Помилка оновлення: ' + data.message);
+            }
+        })
+        .catch(err => {
+            alert('Виникла помилка мережі: ' + err);
+        });
+    }
 
     </script>
 </body>
