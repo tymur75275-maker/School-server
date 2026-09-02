@@ -431,7 +431,7 @@ def admin_create_user():
     # 2. Якщо роль 'child' (учень) — створюємо додатково запис у таблиці 'Учні'
     if role == 'child':
         student_fields = {
-            'Ім\'я учня': full_name,
+            "Ім'я учня": full_name,
             'Учень': [user_id]
         }
         if class_name:
