@@ -219,7 +219,8 @@ def admin_page():
         today_date=today_str,
         email=admin_email,
         users=users,
-        grades=grades
+        grades=grades,
+        subjects=subjects,
     )
 
 @app.route('/admin/assign_subject', methods=['POST'])
