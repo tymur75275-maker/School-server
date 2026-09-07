@@ -205,15 +205,6 @@
         <!-- Секції управління довідниками (Створення предметів, користувачів, класів) -->
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 35px;">
             
-            <h3>Існуючі предмети</h3>
-            <ul>
-                {% for subject in subjects %}
-                    <li>{{ subject.fields.get('Назва предмета') }}</li>
-                {% else %}
-                    <li>Предметів поки немає</li>
-                {% endfor %}
-            </ul>
-            
             <!-- Створення предмету -->
             <div style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
                 <h4 style="margin-top: 0;">Додати предмет</h4>
