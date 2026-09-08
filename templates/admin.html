@@ -382,7 +382,7 @@
     
                 <div class="form-group">
                     <label>Оцінка (1-12):</label>
-                    <input type="number" id="modalGrade" min="1" max="12">
+                    <input type="text" id="modalGrade">
                 </div>
             
                 <div class="form-group">
@@ -530,7 +530,7 @@
         const formData = new FormData();
     
         formData.append('record_id', recordId);
-        formData.append('grade', document.getElementById('modalGrade').value);
+        formData.append('grade', document.getElementById('modalGrade').innerText);
         formData.append('status', document.getElementById('modalStatus').value);
         formData.append('comment', document.getElementById('modalComment').value);
         formData.append('date', document.getElementById('modalDate').value);
