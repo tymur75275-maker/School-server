@@ -381,7 +381,7 @@
                 </div>
     
                 <div class="form-group">
-                    <label>Оцінка:</label>
+                    <label>Оцінка (1-12):</label>
                     <input type="number" id="modalGrade" min="1" max="12">
                 </div>
             
@@ -529,12 +529,11 @@
         const recordId = document.getElementById('modalRecordId').value;
         const formData = new FormData();
 
-        grade_input = request.form.get('modalGrade')  # отримуємо рядок, наприклад "5, 4"
-        # Опціонально: розбиваємо по комах і перевіряємо, чи всі елементи є числами
+        grade_input = request.form.get('modalGrade')
         grades_list = [g.strip() for gstr in grade_input.split(',') if (g := gstr.strip()).isdigit()]
         grade_to_save = ", ".join(grades_list)
     
-        formData.append('record_id', recordId);
+        formData.append('record_id', recordId); 
         formData.append('grade', grade_to_save);
         formData.append('status', document.getElementById('modalStatus').value);
         formData.append('comment', document.getElementById('modalComment').value);
