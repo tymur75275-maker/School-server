@@ -528,9 +528,14 @@
         e.preventDefault();
         const recordId = document.getElementById('modalRecordId').value;
         const formData = new FormData();
+
+        grade_input = request.form.get('modalGrade')  # отримуємо рядок, наприклад "5, 4"
+        # Опціонально: розбиваємо по комах і перевіряємо, чи всі елементи є числами
+        grades_list = [g.strip() for gstr in grade_input.split(',') if (g := gstr.strip()).isdigit()]
+        grade_to_save = ", ".join(grades_list)
     
         formData.append('record_id', recordId);
-        formData.append('grade', document.getElementById('modalGrade').value);
+        formData.append('grade', grade_to_save);
         formData.append('status', document.getElementById('modalStatus').value);
         formData.append('comment', document.getElementById('modalComment').value);
         formData.append('date', document.getElementById('modalDate').value);
