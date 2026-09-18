@@ -319,7 +319,19 @@ def teacher_dashboard():
     for subj in all_subjects:
         f = subj['fields']
         subj_email = str(clean_value(f.get('Email')) or '').strip().lower()
-        if subj_email == teacher_email:
+        # Отримуємо значення поля Email (це може бути список або один рядок)
+        raw_emails = f.get('Email', [])
+        
+        # Зводимо до списку рядків у нижньому регістрі
+        if isinstance(raw_emails, list):
+            emails_list = [str(e).strip().lower() for e in raw_emails if e]
+        elif raw_emails:
+            emails_list = [str(raw_emails).strip().lower()]
+        else:
+            emails_list = []
+
+        # Перевіряємо, чи є email поточного вчителя у цьому списку
+        if teacher_email in emails_list:
             teacher_subjects.append({
                 'id': subj['id'],
                 'name': clean_value(f.get('Назва предмета'))
