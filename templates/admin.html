@@ -529,9 +529,12 @@
         const recordId = document.getElementById('modalRecordId').value;
         const formData = new FormData();
 
+        raw_grade = request.form.get('grade', '')
+        grades_list = [g.strip() for g in raw_grade.split(',') if g.strip().isdigit()]
+        grade_to_save = ", ".join(grades_list) 
       
         formData.append('record_id', recordId);
-        formData.append('grade', document.getElementById('modalGrade').value);
+        formData.append('grade', grade_to_save);
         formData.append('status', document.getElementById('modalStatus').value);
         formData.append('comment', document.getElementById('modalComment').value);
         formData.append('date', document.getElementById('modalDate').value);
