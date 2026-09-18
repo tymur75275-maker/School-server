@@ -665,7 +665,9 @@ def update_grade():
         if status == 'Не присутній':
             fields['Оцінка'] = None
         elif grade_val:
-            fields['Оцінка'] = int(grade_val)
+            # Видаляємо int() і зберігаємо якісно відформатований рядок
+            grades_list = [g.strip() for g in str(grade_val).split(',') if g.strip()]
+            fields['Оцінка'] = ", ".join(grades_list)
 
         if grade_date:
             fields['Дата виставлення оцінки'] = grade_date
