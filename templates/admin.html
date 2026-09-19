@@ -539,29 +539,71 @@
         return values.join(', ');
     }
 
+    // Поточні значення полів оцінки як масив (без пустих)
+    function getCurrentGradeValues() {
+        const inputs = document.querySelectorAll('#modalGradeInputs .modal-grade-input');
+        const values = [];
+        inputs.forEach(inp => {
+            const v = inp.value.trim();
+            if (v !== '') values.push(v);
+        });
+        return values;
+    }
+
+    // Кеш оцінок перездачі в межах відкритої модалки — щоб не губити їх
+    // при тимчасовому перемиканні статусу на "Присутній"/"Відстрочка" і назад
+    let modalRetakeGradesCache = [];
+
+    function cacheRetakeGradesIfMultiple() {
+        const values = getCurrentGradeValues();
+        if (values.length > 1) {
+            modalRetakeGradesCache = values;
+        }
+    }
+
+    function restoreRetakeGradesIfCached() {
+        const values = getCurrentGradeValues();
+        if (modalRetakeGradesCache.length > 1 && values.length < modalRetakeGradesCache.length) {
+            setGradeInputs(modalRetakeGradesCache.join(', '));
+        }
+    }
+
     function toggleModalGradeInput() {
         const status = document.getElementById('modalStatus').value;
         const inputs = document.querySelectorAll('#modalGradeInputs .modal-grade-input');
         const addBtn = document.getElementById('btnAddGrade');
 
         if (status === 'Не присутній') {
+            cacheRetakeGradesIfMultiple();
             inputs.forEach(inp => { inp.value = ''; inp.disabled = true; });
             addBtn.style.display = 'none';
-        } else {
+        } else if (status === 'Перездача') {
             inputs.forEach(inp => { inp.disabled = false; });
-            if (status === 'Перездача') {
-                addBtn.style.display = 'inline-block';
-            } else {
-                addBtn.style.display = 'none';
-                // Поза статусом "Перездача" повертаємось до одного поля оцінки
-                setGradeInputs(getGradeValue().split(',')[0] || '');
-            }
+            addBtn.style.display = 'inline-block';
+            // Повертаємо раніше введені кілька оцінок, якщо вони кешовані
+            restoreRetakeGradesIfCached();
+        } else {
+            cacheRetakeGradesIfMultiple();
+            addBtn.style.display = 'none';
+            // Поза статусом "Перездача" тимчасово показуємо лише одне поле,
+            // але кеш зберігаємо на випадок повернення до "Перездача"
+            const values = getCurrentGradeValues();
+            setGradeInputs(values[0] || '');
         }
     }
     
     function openTeacherModal(id, student, grade, status, comment, dt, subjectId) {
         document.getElementById('modalRecordId').value = id;
         document.getElementById('modalStudentName').innerText = student;
+
+        // Скидаємо кеш перездачі для нового запису і заповнюємо його,
+        // якщо запис одразу містить кілька оцінок
+        modalRetakeGradesCache = [];
+        const initialValues = (grade || '').toString().split(',').map(v => v.trim()).filter(v => v !== '');
+        if (initialValues.length > 1) {
+            modalRetakeGradesCache = initialValues;
+        }
+
         setGradeInputs(grade);
         document.getElementById('modalStatus').value = status;
         document.getElementById('modalComment').value = comment;

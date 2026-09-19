@@ -39,6 +39,12 @@
         .btn-close { background: #6c757d; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; }
         .btn-delete { background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; }
         .btn-delete:hover { background: #c82333; }
+
+        /* Поля оцінки в модалці редагування */
+        .grade-input-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+        .modal-grade-input { width: 70px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
+        .btn-remove-grade { background: #dc3545; color: white; border: none; border-radius: 4px; width: 26px; height: 26px; cursor: pointer; font-weight: bold; line-height: 1; }
+        .btn-add-grade { background: #0d6efd; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; }
     </style>
 </head>
 <body>
@@ -188,8 +194,9 @@
                 </div>
     
                 <div class="form-group">
-                    <label>Оцінка (1-12):</label>
-                    <input type="number" id="modalGrade" min="1" max="12">
+                    <label>Оцінка:</label>
+                    <div id="modalGradeInputs"></div>
+                    <button type="button" id="btnAddGrade" class="btn-add-grade" style="display:none; margin-top:6px;" onclick="addGradeInput()">+ Додати ще одну оцінку</button>
                 </div>
     
                 <div class="form-group">
@@ -223,21 +230,152 @@
         });
     });
     
+    // Створює один рядок з числовим полем оцінки (+ кнопка видалення, якщо полів декілька)
+    function createGradeRow(value) {
+        const row = document.createElement('div');
+        row.className = 'grade-input-row';
+
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.className = 'modal-grade-input';
+        input.min = '1';
+        input.max = '12';
+        input.placeholder = '1-12';
+        if (value !== undefined && value !== null && value !== '') {
+            input.value = value;
+        }
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'btn-remove-grade';
+        removeBtn.innerText = '×';
+        removeBtn.title = 'Видалити це поле';
+        removeBtn.onclick = function() { removeGradeInput(removeBtn); };
+
+        row.appendChild(input);
+        row.appendChild(removeBtn);
+        return row;
+    }
+
+    // Оновлює видимість кнопок видалення: якщо поле одне - кнопку ховаємо
+    function refreshRemoveButtons() {
+        const rows = document.querySelectorAll('#modalGradeInputs .grade-input-row');
+        rows.forEach(row => {
+            const btn = row.querySelector('.btn-remove-grade');
+            btn.style.display = rows.length > 1 ? 'inline-block' : 'none';
+        });
+    }
+
+    // Заповнює блок полів оцінок на основі рядка з Airtable ("9, 11, 12" або "10,12")
+    function setGradeInputs(gradeStr) {
+        const container = document.getElementById('modalGradeInputs');
+        container.innerHTML = '';
+
+        const values = (gradeStr || '').toString().split(',')
+            .map(v => v.trim())
+            .filter(v => v !== '');
+
+        if (values.length === 0) {
+            container.appendChild(createGradeRow());
+        } else {
+            values.forEach(v => container.appendChild(createGradeRow(v)));
+        }
+        refreshRemoveButtons();
+    }
+
+    // Додає ще одне числове поле для оцінки (кнопка "Додати ще одну оцінку")
+    function addGradeInput() {
+        const container = document.getElementById('modalGradeInputs');
+        container.appendChild(createGradeRow());
+        refreshRemoveButtons();
+    }
+
+    // Видаляє конкретне поле оцінки (лишає мінімум одне)
+    function removeGradeInput(btn) {
+        const container = document.getElementById('modalGradeInputs');
+        const rows = container.querySelectorAll('.grade-input-row');
+        if (rows.length <= 1) return;
+        btn.closest('.grade-input-row').remove();
+        refreshRemoveButtons();
+    }
+
+    // Збирає всі заповнені оцінки в рядок через кому+пробіл: "9, 11, 12"
+    function getGradeValue() {
+        const inputs = document.querySelectorAll('#modalGradeInputs .modal-grade-input');
+        const values = [];
+        inputs.forEach(inp => {
+            const v = inp.value.trim();
+            if (v !== '') values.push(v);
+        });
+        return values.join(', ');
+    }
+
+    // Поточні значення полів оцінки як масив (без пустих)
+    function getCurrentGradeValues() {
+        const inputs = document.querySelectorAll('#modalGradeInputs .modal-grade-input');
+        const values = [];
+        inputs.forEach(inp => {
+            const v = inp.value.trim();
+            if (v !== '') values.push(v);
+        });
+        return values;
+    }
+
+    // Кеш оцінок перездачі в межах відкритої модалки — щоб не губити їх
+    // при тимчасовому перемиканні статусу на "Присутній"/"Відстрочка" і назад
+    let modalRetakeGradesCache = [];
+
+    function cacheRetakeGradesIfMultiple() {
+        const values = getCurrentGradeValues();
+        if (values.length > 1) {
+            modalRetakeGradesCache = values;
+        }
+    }
+
+    function restoreRetakeGradesIfCached() {
+        const values = getCurrentGradeValues();
+        if (modalRetakeGradesCache.length > 1 && values.length < modalRetakeGradesCache.length) {
+            setGradeInputs(modalRetakeGradesCache.join(', '));
+        }
+    }
+
     function toggleModalGradeInput() {
         const status = document.getElementById('modalStatus').value;
-        const gradeInput = document.getElementById('modalGrade');
+        const inputs = document.querySelectorAll('#modalGradeInputs .modal-grade-input');
+        const addBtn = document.getElementById('btnAddGrade');
+
         if (status === 'Не присутній') {
-            gradeInput.value = '';
-            gradeInput.disabled = true;
+            cacheRetakeGradesIfMultiple();
+            inputs.forEach(inp => { inp.value = ''; inp.disabled = true; });
+            addBtn.style.display = 'none';
+        } else if (status === 'Перездача') {
+            inputs.forEach(inp => { inp.disabled = false; });
+            addBtn.style.display = 'inline-block';
+            // Повертаємо раніше введені кілька оцінок, якщо вони кешовані
+            restoreRetakeGradesIfCached();
         } else {
-            gradeInput.disabled = false;
+            cacheRetakeGradesIfMultiple();
+            addBtn.style.display = 'none';
+            // Поза статусом "Перездача" тимчасово показуємо лише одне поле,
+            // але кеш зберігаємо на випадок повернення до "Перездача"
+            const values = getCurrentGradeValues();
+            setGradeInputs(values[0] || '');
         }
     }
     
     function openTeacherModal(id, student, grade, status, comment, dt, subjectId) {
         document.getElementById('modalRecordId').value = id;
         document.getElementById('modalStudentName').innerText = student;
-        document.getElementById('modalGrade').value = grade;
+
+        // Скидаємо кеш перездачі для нового запису і заповнюємо його,
+        // якщо запис одразу містить кілька оцінок
+        modalRetakeGradesCache = [];
+        const initialValues = (grade || '').toString().split(',').map(v => v.trim()).filter(v => v !== '');
+        if (initialValues.length > 1) {
+            modalRetakeGradesCache = initialValues;
+        }
+
+        setGradeInputs(grade);
         document.getElementById('modalStatus').value = status;
         document.getElementById('modalComment').value = comment;
         document.getElementById('modalDate').value = dt;
@@ -254,11 +392,19 @@
     function saveGradeChange(e) {
         e.preventDefault();
         const recordId = document.getElementById('modalRecordId').value;
+        const status = document.getElementById('modalStatus').value;
+        const gradeValue = getGradeValue();
+
+        if (status !== 'Не присутній' && !gradeValue) {
+            alert('Вкажіть оцінку (1-12).');
+            return;
+        }
+
         const formData = new FormData();
     
         formData.append('record_id', recordId);
-        formData.append('grade', document.getElementById('modalGrade').value);
-        formData.append('status', document.getElementById('modalStatus').value);
+        formData.append('grade', gradeValue);
+        formData.append('status', status);
         formData.append('comment', document.getElementById('modalComment').value);
         formData.append('date', document.getElementById('modalDate').value);
         formData.append('subject_id', document.getElementById('modalSubject').value);
