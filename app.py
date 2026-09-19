@@ -722,7 +722,9 @@ def add_single_grade():
         fields['Учень'] = [students[0]['id']]
         
     if grade and status != 'Не присутній':
-        fields['Оцінка'] = int(grade)
+        # Підтримка кількох оцінок через кому+пробіл (наприклад, "9, 11, 12")
+        grades_list = [g.strip() for g in str(grade).split(',') if g.strip()]
+        fields['Оцінка'] = ", ".join(grades_list)
 
     grades_table.create(fields)
     return jsonify({'status': 'success'})
