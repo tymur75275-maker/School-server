@@ -622,7 +622,9 @@ def add_grade():
             if grade_date:
                 payload['Дата виставлення оцінки'] = grade_date
             if grade_val:
-                payload['Оцінка'] = int(grade_val)
+                # Підтримка кількох оцінок через кому+пробіл (наприклад, "9, 11, 12")
+                grades_list = [g.strip() for g in str(grade_val).split(',') if g.strip()]
+                payload['Оцінка'] = ", ".join(grades_list)
             if comment_val:
                 payload['Коментар вчителя'] = comment_val
 

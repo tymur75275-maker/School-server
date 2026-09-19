@@ -44,6 +44,8 @@
         .grade-input-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
         .modal-grade-input { width: 70px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
         .btn-remove-grade { background: #dc3545; color: white; border: none; border-radius: 4px; width: 26px; height: 26px; cursor: pointer; font-weight: bold; line-height: 1; }
+        .grade-inputs-container { display: flex; flex-direction: column; gap: 4px; }
+        .grade-cell { display: flex; flex-direction: column; }
         .btn-add-grade { background: #0d6efd; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; }
     </style>
 </head>
@@ -119,7 +121,7 @@
         <!-- Секція 2: Форма виставлення оцінок -->
         <div class="section">
             <h3>Виставити оцінки</h3>
-            <form action="{{ url_for('add_grade') }}" method="POST">
+            <form action="{{ url_for('add_grade') }}" method="POST" id="addGradeForm">
                 
                 <div class="form-group">
                     <label for="grade_date">Оберіть дату уроку:</label>
@@ -152,7 +154,16 @@
                             <option value="Відстрочка">Відстрочка</option>
                         </select>
 
-                        <input type="number" name="grade_{{ st_id }}" min="1" max="12" placeholder="Оцінка (1-12)">
+                        <div class="grade-cell">
+                            <div id="gradeInputs_{{ st_id }}" class="grade-inputs-container">
+                                <div class="grade-input-row">
+                                    <input type="number" class="row-grade-input" min="1" max="12" placeholder="1-12">
+                                </div>
+                            </div>
+                            <button type="button" id="btnAddGrade_{{ st_id }}" class="btn-add-grade" style="display:none; margin-top:4px;" onclick="addRowGradeInput('{{ st_id }}')">+ Ще оцінка</button>
+                            <input type="hidden" name="grade_{{ st_id }}" id="grade_hidden_{{ st_id }}">
+                        </div>
+
                         <input type="text" name="comment_{{ st_id }}" placeholder="Коментар" style="flex-grow: 1;">
                     </div>
                 {% endfor %}
@@ -216,19 +227,144 @@
     </div>
     
     <script>
-    // Автоматичне вимкнення поля оцінки при виборі "Не присутній" у нижній формі
-    document.querySelectorAll('.student-row select').forEach(selectEl => {
-        selectEl.addEventListener('change', function() {
-            const row = this.closest('.student-row');
-            const gradeInput = row.querySelector('input[type="number"]');
-            if (this.value === 'Не присутній') {
-                gradeInput.value = '';
-                gradeInput.disabled = true;
-            } else {
-                gradeInput.disabled = false;
+    // --- Мультиоцінка у формі "Виставити оцінки" (масове створення) ---
+
+    // Кеш оцінок перездачі per-студент, щоб не губити їх при перемиканні статусу
+    const rowRetakeGradesCache = {};
+
+    function createRowGradeInput(value, containerEl) {
+        const row = document.createElement('div');
+        row.className = 'grade-input-row';
+
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.className = 'row-grade-input';
+        input.min = '1';
+        input.max = '12';
+        input.placeholder = '1-12';
+        if (value !== undefined && value !== null && value !== '') {
+            input.value = value;
+        }
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'btn-remove-grade';
+        removeBtn.innerText = '×';
+        removeBtn.title = 'Видалити це поле';
+        removeBtn.onclick = function() {
+            const rows = containerEl.querySelectorAll('.grade-input-row');
+            if (rows.length <= 1) return;
+            row.remove();
+            refreshRowRemoveButtons(containerEl);
+        };
+
+        row.appendChild(input);
+        row.appendChild(removeBtn);
+        return row;
+    }
+
+    function refreshRowRemoveButtons(containerEl) {
+        const rows = containerEl.querySelectorAll('.grade-input-row');
+        rows.forEach(r => {
+            const btn = r.querySelector('.btn-remove-grade');
+            btn.style.display = rows.length > 1 ? 'inline-block' : 'none';
+        });
+    }
+
+    function getRowGradeValues(stId) {
+        const container = document.getElementById('gradeInputs_' + stId);
+        const values = [];
+        container.querySelectorAll('.row-grade-input').forEach(inp => {
+            const v = inp.value.trim();
+            if (v !== '') values.push(v);
+        });
+        return values;
+    }
+
+    function setRowGradeInputs(stId, gradeStr) {
+        const container = document.getElementById('gradeInputs_' + stId);
+        container.innerHTML = '';
+        const values = (gradeStr || '').toString().split(',').map(v => v.trim()).filter(v => v !== '');
+        if (values.length === 0) {
+            container.appendChild(createRowGradeInput('', container));
+        } else {
+            values.forEach(v => container.appendChild(createRowGradeInput(v, container)));
+        }
+        refreshRowRemoveButtons(container);
+    }
+
+    function addRowGradeInput(stId) {
+        const container = document.getElementById('gradeInputs_' + stId);
+        container.appendChild(createRowGradeInput('', container));
+        refreshRowRemoveButtons(container);
+    }
+
+    function toggleRowGradeInput(stId) {
+        const select = document.querySelector('select[name="status_' + stId + '"]');
+        if (!select) return;
+        const status = select.value;
+        const container = document.getElementById('gradeInputs_' + stId);
+        const addBtn = document.getElementById('btnAddGrade_' + stId);
+        const inputs = container.querySelectorAll('.row-grade-input');
+
+        if (status === 'Не присутній') {
+            const values = getRowGradeValues(stId);
+            if (values.length > 1) rowRetakeGradesCache[stId] = values;
+            inputs.forEach(inp => { inp.value = ''; inp.disabled = true; });
+            if (addBtn) addBtn.style.display = 'none';
+        } else if (status === 'Перездача') {
+            inputs.forEach(inp => { inp.disabled = false; });
+            if (addBtn) addBtn.style.display = 'inline-block';
+            const currentValues = getRowGradeValues(stId);
+            const cached = rowRetakeGradesCache[stId];
+            if (cached && cached.length > 1 && currentValues.length < cached.length) {
+                setRowGradeInputs(stId, cached.join(', '));
+            }
+        } else {
+            inputs.forEach(inp => { inp.disabled = false; });
+            const values = getRowGradeValues(stId);
+            if (values.length > 1) rowRetakeGradesCache[stId] = values;
+            if (addBtn) addBtn.style.display = 'none';
+            setRowGradeInputs(stId, values[0] || '');
+        }
+    }
+
+    // Делеговані обробники подій для форми масового виставлення оцінок:
+    // - автовибір чекбокса учня при зміні будь-якого поля в його рядку
+    // - перемикання полів оцінки при зміні статусу
+    (function() {
+        const addGradeFormEl = document.getElementById('addGradeForm');
+        if (!addGradeFormEl) return;
+
+        addGradeFormEl.addEventListener('input', function(e) {
+            const row = e.target.closest('.student-row');
+            if (row) {
+                const checkbox = row.querySelector('input[type="checkbox"]');
+                if (checkbox) checkbox.checked = true;
             }
         });
-    });
+
+        addGradeFormEl.addEventListener('change', function(e) {
+            if (e.target.matches('select[name^="status_"]')) {
+                const stId = e.target.name.replace('status_', '');
+                toggleRowGradeInput(stId);
+                const checkbox = e.target.closest('.student-row').querySelector('input[type="checkbox"]');
+                if (checkbox) checkbox.checked = true;
+            }
+        });
+
+        // Перед відправкою форми переносимо значення з числових полів
+        // у приховані поля "grade_<id>" у форматі "9, 11, 12"
+        addGradeFormEl.addEventListener('submit', function() {
+            addGradeFormEl.querySelectorAll('[id^="gradeInputs_"]').forEach(container => {
+                const stId = container.id.replace('gradeInputs_', '');
+                const hidden = document.getElementById('grade_hidden_' + stId);
+                if (hidden) {
+                    hidden.value = getRowGradeValues(stId).join(', ');
+                }
+            });
+        });
+    })();
     
     // Створює один рядок з числовим полем оцінки (+ кнопка видалення, якщо полів декілька)
     function createGradeRow(value) {
@@ -455,15 +591,6 @@
         if (event.target === modal) {
             closeTeacherModal();
       }
-    });
-
-    // Авто-вибір чекбокса учня при зміні його оцінки або статусу
-    document.querySelectorAll('.student-row input, .student-row select').forEach(input => {
-       input.addEventListener('input', function() {
-           const row = this.closest('.student-row');
-           const checkbox = row.querySelector('input[type="checkbox"]');
-           checkbox.checked = true;
-       });
     });
 
     </script>
