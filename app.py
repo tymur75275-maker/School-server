@@ -5,6 +5,7 @@ from datetime import date
 from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadTimeSignature
 from werkzeug.security import generate_password_hash, check_password_hash
+import cache
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'default_secret_key_for_dev')
@@ -28,6 +29,11 @@ grades_table = api.table(AIRTABLE_BASE_ID, 'Оцінки')
 users_table = api.table(AIRTABLE_BASE_ID, 'Users')
 subjects_table = api.table(AIRTABLE_BASE_ID, 'Предмети')
 students_table = api.table(AIRTABLE_BASE_ID, 'Учні')
+
+# Один раз при старті процесу підтягуємо всі 4 таблиці в оперативку.
+# Далі всі GET-сторінки читають ЛИШЕ з cache.get_*(), без звернень до Airtable.
+cache.init_cache(users_table, students_table, subjects_table, grades_table)
+
 
 def clean_value(val):
     """Якщо значення прийшло як список ['...'], витягуємо перший елемент"""
@@ -63,9 +69,9 @@ def login():
         email = request.form.get('email', '').strip()
         password = request.form.get('password', '').strip()
         
-        # Шукаємо користувача в таблиці Users за введеним Email
-        records = users_table.all(formula=f"{{Email}} = '{email}'")
-        
+        # Шукаємо користувача в кеші (без запиту в Airtable)
+        records = [u for u in cache.get_users() if str(clean_value(u['fields'].get('Email'))) == email]
+
         if records:
             user_fields = records[0]['fields']
             stored_password = clean_value(user_fields.get('Password'))
@@ -102,13 +108,13 @@ def admin_page():
 
     admin_email = session['user']
 
-    users = users_table.all()
-    students = students_table.all()
-    subjects = subjects_table.all()
-    grades = grades_table.all()
+    users = cache.get_users()
+    students = cache.get_students()
+    subjects = cache.get_subjects()
+    grades = cache.get_grades()
 
     # 1. Отримуємо ВСІ предмети для адміна (не за фільтром вчителя)
-    all_subjects_records = subjects_table.all()
+    all_subjects_records = cache.get_subjects()
     all_subjects = []
     for subj in all_subjects_records:
         f = subj['fields']
@@ -134,7 +140,7 @@ def admin_page():
             break
 
     # 2. Отримуємо оцінки для вибраного предмета
-    all_grades = grades_table.all()
+    all_grades = cache.get_grades()
     students_set = set()
     dates_set = set()
     raw_grades = []
@@ -170,7 +176,7 @@ def admin_page():
         matrix[g['student']][g['date']].append(g)
 
     # 3. Список всіх учнів для форми виставлення
-    student_records = students_table.all()
+    student_records = cache.get_students()
     students_list = []
     for st in student_records:
         st_id = st['id']
@@ -182,7 +188,7 @@ def admin_page():
     students_list = sorted(students_list, key=lambda x: x[1])
 
     # 4. Список усіх вчителів та їх закріплених предметів (для модального вікна / блоку призначень)
-    users_records = users_table.all()
+    users_records = cache.get_users()
     teachers_list = []
     for u in users_records:
         uf = u['fields']
@@ -221,7 +227,26 @@ def admin_page():
         users=users,
         grades=grades,
         subjects=subjects,
+        last_sync=cache.get_last_sync(),
     )
+
+
+@app.route('/admin/refresh_cache', methods=['POST'])
+def admin_refresh_cache():
+    """Ручне підтягування даних з Airtable в оперативку.
+
+    Викликати, коли щось редагували напряму в Airtable (або іншим
+    сервісом) і хочуть, щоб сайт це побачив без перезапуску процесу.
+    """
+    if session.get('role') != 'admin':
+        return jsonify({'status': 'error', 'message': 'Недостатньо прав'}), 403
+
+    try:
+        last_sync = cache.refresh_cache()
+        return jsonify({'status': 'success', 'last_sync': last_sync.isoformat()})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 
 @app.route('/admin/assign_subject', methods=['POST'])
 def assign_subject():
@@ -236,7 +261,7 @@ def assign_subject():
             return jsonify({'status': 'error', 'message': 'Вчителя не вказано'}), 400
 
         # Оновлюємо зв'язок Link to Record полів у таблиці Users
-        users_table.update(teacher_id, {'Предмети': subject_ids})
+        cache.update_record('users', teacher_id, {'Предмети': subject_ids})
         return jsonify({'status': 'success'})
 
     except Exception as e:
@@ -252,13 +277,16 @@ def student_dashboard():
     student_email = str(session.get('user', '')).strip().lower()
 
     # 1. Знаходимо ім'я учня за його Email з таблиці "Users" або "Учні"
-    user_records = users_table.all(formula=f"LOWER({{Email}}) = '{student_email}'")
+    user_records = [
+        u for u in cache.get_users()
+        if str(clean_value(u['fields'].get('Email')) or '').strip().lower() == student_email
+    ]
     student_name = None
     if user_records:
         student_name = clean_value(user_records[0]['fields'].get('Full Name'))
 
     # 2. Отримуємо всі оцінки для цього учня
-    all_grades = grades_table.all()
+    all_grades = cache.get_grades()
     subjects_set = set()
     dates_set = set()
     raw_grades = []
@@ -313,7 +341,7 @@ def teacher_dashboard():
     teacher_email = str(session.get('user', '')).strip().lower()
 
     # 1. Знаходимо всі предмети, які викладає ЦЕЙ вчитель (фільтр за Email у таблиці "Предмети")
-    all_subjects = subjects_table.all()
+    all_subjects = cache.get_subjects()
     teacher_subjects = []
     
     for subj in all_subjects:
@@ -349,7 +377,7 @@ def teacher_dashboard():
             break
 
     # 2. Отримуємо оцінки ЛИШЕ для вибраного предмета цього вчителя
-    all_grades = grades_table.all()
+    all_grades = cache.get_grades()
     students_set = set()
     dates_set = set()
     raw_grades = []
@@ -390,7 +418,7 @@ def teacher_dashboard():
         matrix[g['student']][g['date']].append(g)
 
     # 3. Список всіх учнів для форми виставлення
-    student_records = students_table.all()
+    student_records = cache.get_students()
     students_list = []
     for st in student_records:
         st_id = st['id']
@@ -438,7 +466,7 @@ def admin_create_user():
         'Role': role,
         'Password': password
     }
-    new_user = users_table.create(user_fields)
+    new_user = cache.create_record('users', user_fields)
     user_id = new_user['id']
 
     # 2. Якщо роль 'child' (учень) — створюємо додатково запис у таблиці 'Учні'
@@ -449,7 +477,7 @@ def admin_create_user():
         }
         if class_name:
             student_fields['Клас'] = class_name
-        students_table.create(student_fields)
+        cache.create_record('students', student_fields)
 
     return jsonify({'status': 'success', 'user': new_user})
 
@@ -481,7 +509,7 @@ def admin_update_user():
     if password:  # Пароль оновлюємо тільки якщо його ввели в формі
         update_fields['Password'] = password
 
-    updated_user = users_table.update(user_id, update_fields)
+    updated_user = cache.update_record('users', user_id, update_fields)
     return jsonify({'status': 'success', 'user': updated_user})
 
 
@@ -498,15 +526,15 @@ def admin_delete_user():
         return jsonify({'status': 'error', 'message': 'Відсутній ID користувача'}), 400
 
     # Шукаємо та видаляємо пов'язаний запис з таблиці 'Учні' (якщо є)
-    students = students_table.all()
+    students = cache.get_students()
     for st in students:
         linked_users = st['fields'].get('Учень', [])
         if user_id in linked_users:
-            students_table.delete(st['id'])
+            cache.delete_record('students', st['id'])
             break
 
     # Видаляємо запис з таблиці 'Users'
-    users_table.delete(user_id)
+    cache.delete_record('users', user_id)
 
     return jsonify({'status': 'success'})
 
@@ -521,7 +549,7 @@ def create_subject():
         return jsonify({'status': 'error', 'message': 'Введіть назву предмета'}), 400
 
     # Запис у таблицю 'Предмети' (поле 'Назва предмета')
-    subjects_table.create({'Назва предмета': name})
+    cache.create_record('subjects', {'Назва предмета': name})
     return jsonify({'status': 'success'})
 
 
@@ -530,8 +558,8 @@ def forgot_password():
     if request.method == 'POST':
         email = request.form.get('email', '').strip()
         
-        # Шукаємо користувача в Airtable за Email
-        records = users_table.all(formula=f"{{Email}} = '{email}'")
+        # Шукаємо користувача в кеші за Email
+        records = [u for u in cache.get_users() if str(clean_value(u['fields'].get('Email'))) == email]
         if records:
             user = records[0]
             user_id = user['id']
@@ -574,8 +602,8 @@ def reset_password(token):
             flash('Паролі не збігаються!', 'danger')
             return render_template('reset_password.html', token=token)
 
-        
-        users_table.update(user_id, {'Password': new_password})
+
+        cache.update_record('users', user_id, {'Password': new_password})
 
         flash('Ваш пароль успішно змінено! Тепер ви можете увійти.', 'success')
         return redirect(url_for('login'))
@@ -631,7 +659,7 @@ def add_grade():
             records_to_create.append(payload)
 
         if records_to_create:
-            grades_table.batch_create(records_to_create)
+            cache.batch_create('grades', records_to_create)
 
         return redirect(url_for('teacher_dashboard'))
 
@@ -677,7 +705,7 @@ def update_grade():
         if subject_id:
             fields['Предмет'] = [subject_id]
 
-        grades_table.update(record_id, fields)
+        cache.update_record('grades', record_id, fields)
         return {'status': 'success'}
 
     except Exception as e:
@@ -694,8 +722,8 @@ def delete_grade():
         if not record_id:
             return {'status': 'error', 'message': 'ID запису відсутній'}, 400
 
-        # Видалення запису з Airtable
-        grades_table.delete(record_id)
+        # Видалення запису (з Airtable і з кешу)
+        cache.delete_record('grades', record_id)
         return {'status': 'success'}
 
     except Exception as e:
@@ -710,8 +738,11 @@ def add_single_grade():
     grade = request.form.get('grade')
     comment = request.form.get('comment')
 
-    # Пошук запису учня за іменем для отримання його ID
-    students = students_table.all(formula=f"{{Ім'я учня}} = '{student_name}'")
+    # Пошук запису учня за іменем для отримання його ID (з кешу)
+    students = [
+        s for s in cache.get_students()
+        if str(clean_value(s['fields'].get("Ім'я учня"))) == str(student_name)
+    ]
     
     fields = {
         'Предмет': [subject_id],
@@ -728,7 +759,7 @@ def add_single_grade():
         grades_list = [g.strip() for g in str(grade).split(',') if g.strip()]
         fields['Оцінка'] = ", ".join(grades_list)
 
-    grades_table.create(fields)
+    cache.create_record('grades', fields)
     return jsonify({'status': 'success'})
 
 

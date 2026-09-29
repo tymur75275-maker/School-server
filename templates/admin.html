@@ -57,8 +57,14 @@
     <div class="container">
         <div class="header">
             <h2>Кабінет Адміністратора <span class="admin-badge">Admin</span></h2>
-            <div>
-                <span style="margin-right: 15px; font-weight: bold;">{{ email }}</span>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                {% if last_sync %}
+                    <span id="syncStatus" style="font-size: 12px; color: #666;">Синхронізовано: {{ last_sync.strftime('%d.%m.%Y %H:%M') }}</span>
+                {% else %}
+                    <span id="syncStatus" style="font-size: 12px; color: #666;"></span>
+                {% endif %}
+                <button type="button" onclick="refreshFromAirtable()" id="refreshBtn" class="btn-assign" style="background:#20c997;">Оновити з Airtable</button>
+                <span style="font-weight: bold;">{{ email }}</span>
                 <a href="{{ url_for('logout') }}" class="btn-logout">Вийти</a>
             </div>
         </div>
@@ -772,6 +778,30 @@
 
     function closeAssignModal() {
         document.getElementById('assignModal').style.display = 'none';
+    }
+
+    function refreshFromAirtable() {
+        const btn = document.getElementById('refreshBtn');
+        const status = document.getElementById('syncStatus');
+        btn.disabled = true;
+        btn.textContent = 'Оновлення…';
+
+        fetch('/admin/refresh_cache', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    window.location.reload();
+                } else {
+                    alert('Помилка оновлення: ' + data.message);
+                    btn.disabled = false;
+                    btn.textContent = 'Оновити з Airtable';
+                }
+            })
+            .catch(() => {
+                alert('Не вдалося звʼязатися з сервером.');
+                btn.disabled = false;
+                btn.textContent = 'Оновити з Airtable';
+            });
     }
 
     function saveSubjectAssignment(e) {
