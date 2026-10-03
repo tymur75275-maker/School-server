@@ -57,8 +57,6 @@
             <a href="{{ url_for('logout') }}" class="btn-logout">Вийти</a>
         </div>
 
-{% include '_portal_tabs.html' %}
-<div class="ptab-pane active" id="tab-grades">
         <!-- Секція 1: Журнал оцінок з перемикачем предметів -->
         <div class="section">
             <h3>Журнал оцінок</h3>
@@ -173,8 +171,6 @@
                 <button type="submit" class="btn-submit" style="margin-top: 15px;">Зберегти оцінки</button>
             </form>
         </div>
-</div>
-{% include '_portal_stubs.html' %}
     </div>
         <!-- Модальне вікно редагування оцінки -->
     <div id="teacherModal" class="modal-overlay">
@@ -341,7 +337,6 @@
         if (!addGradeFormEl) return;
 
         addGradeFormEl.addEventListener('input', function(e) {
-            if (e.target.type === 'checkbox') return; // дозволяємо знімати галочку вручну
             const row = e.target.closest('.student-row');
             if (row) {
                 const checkbox = row.querySelector('input[type="checkbox"]');

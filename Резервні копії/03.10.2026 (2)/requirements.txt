@@ -1,7 +1,6 @@
 Flask
 gunicorn
-pyairtable>=3.0
+pyairtable
 Flask-Mail
 itsdangerous
 Werkzeug
-tzdata

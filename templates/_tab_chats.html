@@ -1,0 +1,87 @@
+<div class="ptab-pane" id="tab-chats">
+  <style>
+  .chat-wrap{display:flex;gap:14px;flex-wrap:wrap;margin-top:12px}
+  .chat-list{flex:1 1 260px;max-width:340px;display:flex;flex-direction:column;gap:8px}
+  .chat-item{background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:10px;cursor:pointer}
+  .chat-item.active{border-color:#007bff;background:#eef5ff}
+  .chat-panel{flex:3 1 340px;background:#fff;border:1px solid #dee2e6;border-radius:8px;display:none;flex-direction:column;height:480px}
+  .chat-head{padding:10px 14px;border-bottom:1px solid #eee;font-weight:bold}
+  .chat-msgs{flex:1;overflow:auto;padding:12px;display:flex;flex-direction:column;gap:8px;background:#f8f9fa}
+  .chat-msg{max-width:75%;padding:8px 12px;border-radius:10px;background:#e9ecef;white-space:pre-wrap;word-break:break-word}
+  .chat-msg.mine{align-self:flex-end;background:#cfe8ff}
+  .chat-msg small{display:block;color:#666;font-size:11px;margin-bottom:2px}
+  .chat-send{display:flex;gap:8px;padding:10px;border-top:1px solid #eee}
+  .chat-send textarea{flex:1;padding:8px;border:1px solid #ccc;border-radius:4px;resize:none;font-family:inherit}
+  </style>
+  <button type="button" class="pbtn pbtn-green" onclick="document.getElementById('chatNewModal').style.display='flex'">+ Створити чат</button>
+  <div class="chat-wrap">
+    <div class="chat-list">
+      {% for c in chat_list %}
+      <div class="chat-item" id="chatItem_{{ c.id }}" data-id="{{ c.id }}" data-title="{{ c.title }}" data-with="{{ c.with }}" data-member="{{ '1' if c.member else '' }}" onclick="chatOpen(this.dataset)">
+        <div><b>{{ c.title or c.with }}</b></div>
+        <div style="font-size:12px;color:#666">{{ 'Співрозмовник' if c.member else 'Учасники' }}: {{ c.with }}</div>
+        <div style="font-size:12px;color:#888;margin-top:4px">{{ c.last_text }}{% if c.last_text|length >= 60 %}…{% endif %} · {{ c.last_time }}</div>
+      </div>
+      {% else %}<p style="color:#666">Чатів немає.</p>{% endfor %}
+    </div>
+    <div class="chat-panel" id="chatPanel">
+      <div class="chat-head" id="chatHead"></div>
+      <div class="chat-msgs" id="chatMsgs"></div>
+      <div class="chat-send" id="chatSend">
+        <textarea id="chatText" rows="2" placeholder="Повідомлення..."></textarea>
+        <button type="button" class="pbtn" onclick="chatSendMsg()">Надіслати</button>
+      </div>
+    </div>
+  </div>
+  <div class="pm-overlay" id="chatNewModal"><div class="pm-box">
+    <h4>Новий чат</h4>
+    <label>Кому</label>
+    <select id="chatTo">{% for u in chat_users %}<option value="{{ u.id }}">{{ u.name }} ({{ u.label }})</option>{% endfor %}</select>
+    <label>Назва чату (необов'язково)</label>
+    <input type="text" id="chatTitle" style="width:100%;box-sizing:border-box;padding:8px;border:1px solid #ccc;border-radius:4px">
+    <label>Перше повідомлення</label><textarea id="chatFirst" rows="3"></textarea>
+    <div class="pm-actions">
+      <button type="button" class="pbtn pbtn-gray" onclick="document.getElementById('chatNewModal').style.display='none'">Скасувати</button>
+      <button type="button" class="pbtn pbtn-green" onclick="chatCreate()">Створити</button>
+    </div>
+  </div></div>
+  <script>
+  (function(){
+    let cur=null, timer=null, lastSig='';
+    const $=id=>document.getElementById(id);
+    window.chatOpen=function(d){
+      cur=d.id; lastSig='';
+      document.querySelectorAll('.chat-item').forEach(e=>e.classList.toggle('active',e.dataset.id===cur));
+      $('chatHead').textContent=(d.title||d.with)+' — '+d.with;
+      $('chatSend').style.display=d.member?'flex':'none';
+      $('chatPanel').style.display='flex';
+      load(true); clearInterval(timer); timer=setInterval(()=>{
+        if(document.getElementById('tab-chats').classList.contains('active')) load(false)},4000);
+    };
+    function load(scroll){
+      const id=cur;
+      fetch('/chats/'+id+'/messages').then(r=>r.json()).then(j=>{
+        if(!j.ok||id!==cur) return;
+        const sig=j.messages.map(m=>m.id).join(',');
+        if(sig===lastSig) return; lastSig=sig;
+        const box=$('chatMsgs'); const atEnd=scroll||box.scrollHeight-box.scrollTop-box.clientHeight<60;
+        box.innerHTML='';
+        j.messages.forEach(m=>{
+          const d=document.createElement('div'); d.className='chat-msg'+(m.mine?' mine':'');
+          const s=document.createElement('small'); s.textContent=m.from_name+' · '+m.time;
+          const t=document.createElement('span'); t.textContent=m.text;
+          d.append(s,t); box.appendChild(d);
+        });
+        if(atEnd) box.scrollTop=box.scrollHeight;
+      });
+    }
+    window.chatSendMsg=function(){
+      const t=$('chatText').value.trim(); if(!t||!cur) return;
+      portalPost('/chats/send',portalFD({chat_id:cur,text:t})).then(ok=>{if(ok){$('chatText').value='';load(true)}});
+    };
+    window.chatCreate=function(){
+      portalAct('/chats/create',portalFD({to:$('chatTo').value,title:$('chatTitle').value,text:$('chatFirst').value}));
+    };
+  })();
+  </script>
+</div>

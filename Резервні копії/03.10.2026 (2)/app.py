@@ -6,12 +6,9 @@ from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadTimeSignature
 from werkzeug.security import generate_password_hash, check_password_hash
 import cache
-from portal import bp as portal_bp, portal_context
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'default_secret_key_for_dev')
-app.register_blueprint(portal_bp)
-app.config['MAX_CONTENT_LENGTH'] = 40 * 1024 * 1024  # завантаження файлів домашок
 
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
@@ -32,17 +29,10 @@ grades_table = api.table(AIRTABLE_BASE_ID, 'Оцінки')
 users_table = api.table(AIRTABLE_BASE_ID, 'Users')
 subjects_table = api.table(AIRTABLE_BASE_ID, 'Предмети')
 students_table = api.table(AIRTABLE_BASE_ID, 'Учні')
-discipline_table = api.table(AIRTABLE_BASE_ID, 'Догани')
-announcements_table = api.table(AIRTABLE_BASE_ID, 'Оголошення')
-messages_table = api.table(AIRTABLE_BASE_ID, 'Повідомлення')
-chats_table = api.table(AIRTABLE_BASE_ID, 'Чати')
-homework_table = api.table(AIRTABLE_BASE_ID, 'Домашки')
 
 # Один раз при старті процесу підтягуємо всі 4 таблиці в оперативку.
 # Далі всі GET-сторінки читають ЛИШЕ з cache.get_*(), без звернень до Airtable.
-cache.init_cache(users_table, students_table, subjects_table, grades_table,
-                 discipline_table, announcements_table,
-                 messages_table, chats_table, homework_table)
+cache.init_cache(users_table, students_table, subjects_table, grades_table)
 
 
 def clean_value(val):
@@ -238,7 +228,6 @@ def admin_page():
         grades=grades,
         subjects=subjects,
         last_sync=cache.get_last_sync(),
-        **portal_context('admin', admin_email),
     )
 
 
@@ -339,8 +328,7 @@ def student_dashboard():
         matrix=matrix,
         subjects=subjects_list,
         dates=dates_list,
-        email=student_email,
-        **portal_context('student', student_email)
+        email=student_email
     )
 
 
@@ -451,8 +439,7 @@ def teacher_dashboard():
         selected_subject_name=selected_subject_name,
         students=students_list,
         today_date=today_str,
-        email=teacher_email,
-        **portal_context('teacher', teacher_email)
+        email=teacher_email
     )
 
 

@@ -75,8 +75,6 @@
             </div>
         </div>
 
-{% include '_portal_tabs.html' %}
-<div class="ptab-pane active" id="tab-grades">
         <h3>Мої оцінки</h3>
 
        {% if matrix and dates %}
@@ -116,8 +114,6 @@
         {% else %}
             <p>Наразі у вас немає виставлених оцінок.</p>
         {% endif %}
-</div>
-{% include '_portal_stubs.html' %}
     </div>
     <!-- Модальне вікно перегляду деталізації оцінки -->
     <div id="studentModal" class="modal-overlay">
