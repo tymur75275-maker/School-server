@@ -4,11 +4,8 @@ from functools import wraps
 from zoneinfo import ZoneInfo
 
 import os
-import secrets
-import tempfile
-from urllib.parse import quote
 
-from flask import Blueprint, request, session, jsonify, redirect, send_file
+from flask import Blueprint, request, session, jsonify, redirect
 
 import cache
 
@@ -45,28 +42,9 @@ def me_record(email):
 
 
 def student_record(email):
-    """Запис учня: за зв'язком Учень→Users, потім за Email-lookup, потім за іменем."""
-    me = me_record(email)
-    students = cache.get_students()
-    if me:
-        for s in students:
-            if me['id'] in lst(s['fields'].get('Учень')):
-                return s
-    for s in students:
+    for s in cache.get_students():
         if _em(s['fields']) == email:
             return s
-    if me:
-        name = str(cv(me['fields'].get('Full Name')) or '').strip()
-        for s in students:
-            if name and str(cv(s['fields'].get("Ім'я учня")) or '').strip() == name:
-                return s
-
-
-def student_name(email, st):
-    if st and cv(st['fields'].get("Ім'я учня")):
-        return str(cv(st['fields'].get("Ім'я учня")))
-    me = me_record(email)
-    return str(cv(me['fields'].get('Full Name')) or '') if me else ''
 
 
 def parse_dt(s):
@@ -119,7 +97,6 @@ def purge_expired_announcements():
 
 def build_announcements(role, me_id):
     purge_expired_announcements()
-    names = user_names()
     out = []
     for r in cache.get_announcements():
         f = r['fields']
@@ -140,9 +117,6 @@ def build_announcements(role, me_id):
             'exp_input': loc.strftime('%Y-%m-%dT%H:%M') if loc else '',
             'for_me': for_me, 'read': me_id in read_ids,
             'read_count': len(read_ids),
-            'read_names': [names.get(i, '?') for i in read_ids],
-            'unread_names': [names.get(i, '?') for i in to_ids if i not in read_ids],
-            'created': _local(r.get('createdTime'), True),
         })
     out.sort(key=lambda a: a['num'] if isinstance(a['num'], (int, float)) else 0, reverse=True)
     return out
@@ -353,9 +327,9 @@ def participants(msgs):
     return out
 
 
-def _local(created, full=False):
+def _local(created):
     d = parse_dt(created)
-    return d.astimezone(TZ).strftime('%d.%m.%Y %H:%M' if full else '%d.%m %H:%M') if d else ''
+    return d.astimezone(TZ).strftime('%d.%m %H:%M') if d else ''
 
 
 def build_chats(role, me_id):
@@ -405,7 +379,6 @@ def chat_msgs(chat_id):
         'id': m['id'], 'text': str(m['fields'].get('Текст') or ''),
         'from_name': names.get(cv(m['fields'].get('Від')), '?'),
         'mine': bool(me and cv(m['fields'].get('Від')) == me['id']),
-        'can_edit': bool(me and (cv(m['fields'].get('Від')) == me['id'] or session.get('role') == 'admin')),
         'time': _local(m.get('createdTime'))} for m in msgs])
 
 
@@ -459,89 +432,8 @@ def chat_create():
     return jsonify(ok=True)
 
 
-def _own_msg(mid):
-    me = me_record(str(session['user']).strip().lower())
-    rec = next((m for m in cache.get_messages() if m['id'] == mid), None)
-    if not rec or not me:
-        return None, err('Не знайдено', 404)
-    if cv(rec['fields'].get('Від')) != me['id'] and session.get('role') != 'admin':
-        return None, err('Доступ заборонено', 403)
-    return rec, None
-
-
-@bp.route('/chats/msg_edit', methods=['POST'])
-@login_only
-def msg_edit():
-    rec, e = _own_msg(request.form.get('id', ''))
-    text = request.form.get('text', '').strip()
-    if e:
-        return e
-    if not text:
-        return err('Порожнє повідомлення')
-    try:
-        cache.update_record('messages', rec['id'], {'Текст': text})
-    except Exception as ex:
-        return err(str(ex), 500)
-    return jsonify(ok=True)
-
-
-@bp.route('/chats/msg_delete', methods=['POST'])
-@login_only
-def msg_delete():
-    rec, e = _own_msg(request.form.get('id', ''))
-    if e:
-        return e
-    chats = lst(rec['fields'].get('Чат'))
-    try:
-        cache.delete_record('messages', rec['id'])
-        for cid in chats:                      # порожній чат прибираємо
-            if not chat_messages(cid):
-                cache.delete_record('chats', cid)
-    except Exception as ex:
-        return err(str(ex), 500)
-    return jsonify(ok=True)
-
-
-@bp.route('/chats/rename', methods=['POST'])
-@login_only
-def chat_rename():
-    me = me_record(str(session['user']).strip().lower())
-    cid = request.form.get('chat_id', '')
-    title = request.form.get('title', '').strip()
-    msgs, parts = _chat_access(cid, me['id'] if me else '', session.get('role'))
-    if msgs is None:
-        return err('Доступ заборонено', 403)
-    if not title:
-        return err('Введіть назву')
-    try:
-        cache.update_record('chats', cid, {'Назва чату': title})
-    except Exception as ex:
-        return err(str(ex), 500)
-    return jsonify(ok=True)
-
-
-@bp.route('/chats/delete', methods=['POST'])
-@login_only
-def chat_delete():
-    me = me_record(str(session['user']).strip().lower())
-    cid = request.form.get('chat_id', '')
-    msgs, parts = _chat_access(cid, me['id'] if me else '', session.get('role'))
-    if msgs is None:
-        return err('Доступ заборонено', 403)
-    try:
-        cache.batch_delete('messages', [m['id'] for m in msgs])
-        cache.delete_record('chats', cid)
-    except Exception as ex:
-        return err(str(ex), 500)
-    return jsonify(ok=True)
-
-
 # ---------- домашки ----------
-MAX_DIRECT = 5 * 1024 * 1024                       # ліміт прямого завантаження в Airtable
-MAX_MB = int(os.environ.get('MAX_UPLOAD_MB', '100'))  # ліміт одного файлу на сайті
-TMP_DIR = os.path.join(tempfile.gettempdir(), 'school_uploads')
-os.makedirs(TMP_DIR, exist_ok=True)
-_TMP = {}   # token -> (шлях, ім'я, mime) — тимчасові публічні посилання для Airtable
+MAX_FILE = 5 * 1024 * 1024
 F_TASK, F_ANS = 'Завдання файл', 'Відповідь файли'
 
 
@@ -549,19 +441,13 @@ def _atts(f, key):
     return [{'id': a.get('id'), 'name': a.get('filename') or 'файл'} for a in (f.get(key) or [])]
 
 
-def hw_assigned(f, st, email):
-    if st and st['id'] in lst(f.get('Учні')):
-        return True
-    return email in [e.strip().lower() for e in lst(f.get('Email-и учнів'))]
-
-
-def build_homework(role, st_rec, sname, email=''):
+def build_homework(role, st_rec, sname):
     pref = f'[{sname}] '
     out = []
     for r in cache.get_homework():
         f = r['fields']
         ids = lst(f.get('Учні'))
-        if role == 'student' and not hw_assigned(f, st_rec, email):
+        if role == 'student' and not (st_rec and st_rec['id'] in ids):
             continue
         ans = _atts(f, F_ANS)
         if role == 'student':
@@ -573,69 +459,20 @@ def build_homework(role, st_rec, sname, email=''):
     return out
 
 
-def _save_files(key='files'):
-    """Зберігає завантажені файли у тимчасову теку (без читання в пам'ять)."""
-    out = []
-    try:
-        for fl in request.files.getlist(key):
-            if not fl or not fl.filename:
-                continue
-            name = os.path.basename(fl.filename.replace('\\', '/'))
-            path = os.path.join(TMP_DIR, secrets.token_hex(16))
-            fl.save(path)
-            size = os.path.getsize(path)
-            out.append((name, path, fl.mimetype or 'application/octet-stream', size))
-            if size > MAX_MB * 1024 * 1024:
-                raise ValueError(f'Файл «{name}» більший за {MAX_MB} МБ')
-    except Exception:
-        _cleanup(out)
-        raise
-    return out
-
-
-def _cleanup(files):
-    for f in files:
-        try:
-            os.remove(f[1])
-        except OSError:
-            pass
-
-
-def _public_base():
-    base = os.environ.get('PUBLIC_BASE_URL', '').rstrip('/')
-    if base:
-        return base
-    proto = request.headers.get('X-Forwarded-Proto', request.scheme)
-    host = request.headers.get('X-Forwarded-Host', request.host)
-    if host.startswith(('localhost', '127.', '192.168.', '10.', '0.0.0.0')):
-        raise ValueError('Файли понад 5 МБ можна завантажувати лише тоді, коли сайт доступний з інтернету '
-                         '(наприклад, на Render) або задано PUBLIC_BASE_URL.')
-    return f'{proto}://{host}'
+def _read_files(key='files'):
+    files = [fl for fl in request.files.getlist(key) if fl and fl.filename]
+    data = []
+    for fl in files:
+        c = fl.read()
+        if len(c) > MAX_FILE:
+            raise ValueError(f'Файл «{fl.filename}» більший за 5 МБ')
+        data.append((os.path.basename(fl.filename.replace('\\', '/')), c, fl.mimetype or 'application/octet-stream'))
+    return data
 
 
 def _upload(rid, field, files, prefix=''):
-    for name, path, ctype, size in files:
-        full = prefix + name
-        if size <= MAX_DIRECT:
-            with open(path, 'rb') as fh:
-                cache.upload_attachment('homework', rid, field, full, fh.read(), ctype)
-        else:
-            token = secrets.token_hex(16)
-            _TMP[token] = (path, full, ctype)
-            try:
-                url = f'{_public_base()}/tmpfile/{token}/{quote(full)}'
-                cache.attach_url('homework', rid, field, url, full)
-            finally:
-                _TMP.pop(token, None)
-
-
-@bp.route('/tmpfile/<token>/<path:name>')
-def tmpfile(token, name):
-    """Одноразове посилання, за яким Airtable забирає великий файл."""
-    it = _TMP.get(token)
-    if not it:
-        return 'Not found', 404
-    return send_file(it[0], mimetype=it[2], as_attachment=True, download_name=it[1])
+    for name, content, ctype in files:
+        cache.upload_attachment('homework', rid, field, prefix + name, content, ctype)
 
 
 @bp.route('/homework/save', methods=['POST'])
@@ -648,7 +485,7 @@ def hw_save():
     if not students:
         return err('Оберіть учнів')
     try:
-        files = _save_files()
+        files = _read_files()
     except ValueError as e:
         return err(str(e))
     if not text and not files and not f.get('id'):
@@ -667,8 +504,6 @@ def hw_save():
         _upload(hid, F_TASK, files)
     except Exception as e:
         return err(str(e), 500)
-    finally:
-        _cleanup(files)
     return jsonify(ok=True)
 
 
@@ -684,9 +519,9 @@ def hw_delete():
 
 
 def _student_ctx():
-    email = str(session['user']).strip().lower()
-    st = student_record(email)
-    return st, student_name(email, st), email
+    st = student_record(str(session['user']).strip().lower())
+    name = str(cv(st['fields'].get("Ім'я учня")) or '') if st else ''
+    return st, name
 
 
 @bp.route('/homework/answer', methods=['POST'])
@@ -694,13 +529,13 @@ def _student_ctx():
 def hw_answer():
     if session.get('role') != 'student':
         return err('Доступ заборонено', 403)
-    st, name, email = _student_ctx()
+    st, name = _student_ctx()
     hid = request.form.get('id', '')
     rec = next((r for r in cache.get_homework() if r['id'] == hid), None)
-    if not rec or not hw_assigned(rec['fields'], st, email):
+    if not rec or not st or st['id'] not in lst(rec['fields'].get('Учні')):
         return err('Не знайдено', 404)
     try:
-        files = _save_files()
+        files = _read_files()
     except ValueError as e:
         return err(str(e))
     if not files:
@@ -709,8 +544,6 @@ def hw_answer():
         _upload(hid, F_ANS, files, prefix=f'[{name}] ')
     except Exception as e:
         return err(str(e), 500)
-    finally:
-        _cleanup(files)
     return jsonify(ok=True)
 
 
@@ -729,8 +562,8 @@ def hw_file_delete():
     if not target:
         return err('Не знайдено', 404)
     if role == 'student':
-        st, name, email = _student_ctx()
-        if key != F_ANS or not hw_assigned(rec['fields'], st, email) \
+        st, name = _student_ctx()
+        if key != F_ANS or not st or st['id'] not in lst(rec['fields'].get('Учні')) \
                 or not (target.get('filename') or '').startswith(f'[{name}] '):
             return err('Доступ заборонено', 403)
     try:
@@ -753,8 +586,8 @@ def hw_file(rid, field, att):
     if not target:
         return 'Не знайдено', 404
     if role == 'student':
-        st, name, email = _student_ctx()
-        if not hw_assigned(rec['fields'], st, email):
+        st, name = _student_ctx()
+        if not st or st['id'] not in lst(rec['fields'].get('Учні')):
             return 'Доступ заборонено', 403
         if key == F_ANS and not (target.get('filename') or '').startswith(f'[{name}] '):
             return 'Доступ заборонено', 403
@@ -799,6 +632,6 @@ def portal_context(role, email):
              'label': ROLE_LABEL.get(str(cv(u['fields'].get('Role')) or '').lower(), '')}
             for u in cache.get_users()
             if u['id'] != me_id and (staff or str(cv(u['fields'].get('Role')) or '').lower() in ('teacher', 'admin'))],
-        'homework_list': build_homework(role, st_rec, student_name(email, st_rec), email),
-        'max_upload_mb': MAX_MB,
+        'homework_list': build_homework(role, st_rec,
+                                        str(cv(st_rec['fields'].get("Ім'я учня")) or '') if st_rec else ''),
     }

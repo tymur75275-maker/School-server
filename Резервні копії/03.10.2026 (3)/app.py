@@ -11,7 +11,7 @@ from portal import bp as portal_bp, portal_context
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'default_secret_key_for_dev')
 app.register_blueprint(portal_bp)
-app.config['MAX_CONTENT_LENGTH'] = 300 * 1024 * 1024  # завантаження файлів домашок
+app.config['MAX_CONTENT_LENGTH'] = 40 * 1024 * 1024  # завантаження файлів домашок
 
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587

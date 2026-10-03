@@ -1,0 +1,48 @@
+<div class="pm-overlay" id="annMandModal"><div class="pm-box">
+  <h4>Обов'язкове оголошення</h4>
+  <div style="font-size:12px;color:#666" id="annMandFrom"></div>
+  <div id="annMandText" class="pcard-text" style="margin:10px 0;max-height:40vh;overflow:auto"></div>
+  <label style="font-weight:normal"><input type="checkbox" id="annMandCheck"> Я прочитав(ла) це оголошення</label>
+  <div class="pm-actions"><button type="button" class="pbtn pbtn-green" id="annMandOk" disabled>Ок</button></div>
+</div></div>
+<div id="annToasts" style="position:fixed;top:14px;right:14px;z-index:1500;display:flex;flex-direction:column;gap:8px;max-width:320px"></div>
+<script>
+function markAnnRead(id){
+  return portalPost('/announcements/read',portalFD({id:id})).then(ok=>{
+    if(ok){const b=document.getElementById('annReadBtn_'+id);if(b)b.outerHTML='<span class="badge b-ok">Прочитано</span>'}
+    return ok;
+  });
+}
+(function(){
+  const ANN={{ announcements|tojson }};
+  const items=ANN.filter(a=>a.for_me&&!a.read);
+  const mand=items.filter(a=>a.mandatory), opt=items.filter(a=>!a.mandatory);
+  const $=id=>document.getElementById(id);
+  function toasts(){
+    const dis=JSON.parse(sessionStorage.getItem('annDismissed')||'[]');
+    opt.filter(a=>!dis.includes(a.id)).forEach(a=>{
+      const t=document.createElement('div');
+      t.style.cssText='background:#fff;border:1px solid #ccc;border-left:5px solid #007bff;border-radius:8px;padding:12px;box-shadow:0 3px 10px rgba(0,0,0,.2)';
+      const p=document.createElement('div');p.style.cssText='margin-bottom:8px;white-space:pre-wrap;word-break:break-word';
+      p.textContent='Нове оголошення: '+(a.text.length>80?a.text.slice(0,80)+'…':a.text);
+      const o=document.createElement('button');o.className='pbtn';o.textContent='Відкрити';
+      o.onclick=()=>{showPortalTab('announcements');markAnnRead(a.id);t.remove();
+        const c=document.getElementById('annCard_'+a.id);if(c)c.scrollIntoView({block:'center'})};
+      const x=document.createElement('button');x.className='pbtn pbtn-gray';x.style.marginLeft='6px';x.textContent='×';
+      x.onclick=()=>{dis.push(a.id);sessionStorage.setItem('annDismissed',JSON.stringify(dis));t.remove()};
+      t.append(p,o,x);$('annToasts').appendChild(t);
+    });
+  }
+  function nextMand(){
+    if(!mand.length){$('annMandModal').style.display='none';toasts();return}
+    const a=mand.shift();
+    $('annMandFrom').textContent=a.from_name?('Від: '+a.from_name):'';
+    $('annMandText').textContent=a.text;
+    $('annMandCheck').checked=false;$('annMandOk').disabled=true;
+    $('annMandOk').onclick=()=>{$('annMandOk').disabled=true;markAnnRead(a.id).then(nextMand)};
+    $('annMandModal').style.display='flex';
+  }
+  $('annMandCheck').addEventListener('change',e=>{$('annMandOk').disabled=!e.target.checked});
+  document.addEventListener('DOMContentLoaded',nextMand);
+})();
+</script>

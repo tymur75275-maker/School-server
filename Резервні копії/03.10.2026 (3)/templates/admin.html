@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Панель Адміністратора</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; }
+        .container { width: 100%; max-width: 1250px; background: yellow; margin: 0 auto; padding: 25px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 20px; }
+        .btn-logout { background: #dc3545; color: white; padding: 8px 16px; text-decoration: none; border-radius: 4px; font-weight: bold; }
+        .admin-badge { background: #6f42c1; color: white; padding: 4px 8px; border-radius: 4px; font-size: 12px; margin-left: 8px; }
+        .section { margin-bottom: 35px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background: #f8f9fa; }
+        .form-group { margin-bottom: 15px; }
+        label { font-weight: bold; display: block; margin-bottom: 5px; }
+        select, input[type="text"], input[type="number"], input[type="date"] { padding: 8px; border: 1px solid #ccc; border-radius: 4px; }
+        .student-row { display: flex; align-items: center; gap: 15px; margin-bottom: 10px; background: #f9f9f9; padding: 10px; border-radius: 6px; }
+        .btn-submit { background: #28a745; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        .btn-submit:hover { background: #218838; }
+        .btn-assign { background: #0d6efd; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+
+        /* Вкладки предметів */
+        .tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 2px solid #ddd; overflow-x: auto; padding-bottom: 5px; }
+        .tab-btn { padding: 8px 16px; background: #e9ecef; border: none; border-radius: 6px 6px 0 0; cursor: pointer; text-decoration: none; color: #333; font-weight: bold; white-space: nowrap; }
+        .tab-btn.active { background: #6f42c1; color: white; }
+        
+        /* Кольори статусів клітинок */
+        .cell-grade { cursor: pointer; border-radius: 4px; padding: 6px; display: block; font-weight: bold; transition: background 0.2s; }
+        .status-present { background-color: #d4edda; color: #155724; }     /* Присутній - зелений */
+        .status-absent { background-color: #f8d7da; color: #721c24; }      /* Не присутній - червоний */
+        .status-retake { background-color: #fff3cd; color: #856404; }      /* Перездача - жовтий/помаранчевий */
+        .status-postponed { background-color: #d1ecf1; color: #0c5460; }   /* Відстрочка - блакитний */
+        
+        /* Модальне вікно */
+        .modal-overlay { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: white; padding: 25px; border-radius: 8px; width: 420px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .modal-header { font-size: 18px; font-weight: bold; margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .modal-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 20px; }
+        .btn-close { background: #6c757d; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; }
+        .btn-delete { background: #dc3545; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; }
+        .btn-delete:hover { background: #c82333; }
+        .close-btn { float: right; font-size: 20px; cursor: pointer; font-weight: bold; }
+
+        /* Поля оцінки в модалці редагування */
+        .grade-input-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+        .modal-grade-input { width: 70px; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
+        .btn-remove-grade { background: #dc3545; color: white; border: none; border-radius: 4px; width: 26px; height: 26px; cursor: pointer; font-weight: bold; line-height: 1; }
+        .grade-inputs-container { display: flex; flex-direction: column; gap: 4px; }
+        .btn-add-grade { background: #0d6efd; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+        .grade-cell { display: flex; flex-direction: column; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h2>Кабінет Адміністратора <span class="admin-badge">Admin</span></h2>
+            <div style="display: flex; align-items: center; gap: 12px;">
+                {% if last_sync %}
+                    <span id="syncStatus" style="font-size: 12px; color: #666;">Синхронізовано: {{ last_sync.strftime('%d.%m.%Y %H:%M') }}</span>
+                {% else %}
+                    <span id="syncStatus" style="font-size: 12px; color: #666;"></span>
+                {% endif %}
+                <button type="button" onclick="refreshFromAirtable()" id="refreshBtn" class="btn-assign" style="background:#20c997;">Оновити з Airtable</button>
+                <span style="font-weight: bold;">{{ email }}</span>
+                <a href="{{ url_for('logout') }}" class="btn-logout">Вийти</a>
+            </div>
+        </div>
+
+        
+
+        <!-- Секція 1: Керування предметами вчителів -->
+        <div class="section" style="background: #f8f9fa; padding: 15px; border-radius: 6px; border: 1px solid #e9ecef;">
+            <h3 style="margin-top: 0;">Закріплення предметів за вчителями</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Вчитель</th>
+                        <th>Email</th>
+                        <th>Закріплені предмети</th>
+                        <th style="width: 120px;">Дія</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for t in teachers %}
+                    <tr>
+                        <td><strong>{{ t.name }}</strong></td>
+                        <td>{{ t.email }}</td>
+                        <td>
+                            {% set assigned_names = [] %}
+                            {% for s in all_subjects %}
+                                {% if s.id in t.assigned_subject_ids %}
+                                    {% set _ = assigned_names.append(s.name) %}
+                                {% endif %}
+                            {% endfor %}
+                            {{ assigned_names|join(', ') if assigned_names else '<em style="color:#888;">Немає предметів</em>'|safe }}
+                        </td>
+                        <td>
+                            <button type="button" class="btn-assign" onclick="openAssignModal('{{ t.id }}', '{{ t.name|escape }}', {{ t.assigned_subject_ids|tojson|forceescape }})">
+                                Налаштувати
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;">
+
+{% include '_portal_tabs.html' %}
+<div class="ptab-pane active" id="tab-grades">
+        <!-- Секція 2: Загальний Журнал оцінок -->
+        <div class="section">
+            <h3>Повний журнал оцінок (усі предмети)</h3>
+
+            {% if all_subjects %}
+                <div class="tabs">
+                    {% for subj in all_subjects %}
+                        <a href="{{ url_for('admin_page', subject_id=subj.id) }}" 
+                           class="tab-btn {% if subj.id == selected_subject_id %}active{% endif %}">
+                            {{ subj.name }}
+                        </a>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <p style="color: red;">Предметів у системі не знайдено.</p>
+            {% endif %}
+
+            {% if matrix and matrix_students %}
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Учень / Дата</th>
+                                {% for dt in matrix_dates %}
+                                    <th>{{ dt }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for st in matrix_students %}
+                                <tr>
+                                    <td><strong>{{ st }}</strong></td>
+                                    {% for dt in matrix_dates %}
+                                        {% set g_list = matrix[st][dt] %}
+                                        <td style="text-align: center; vertical-align: middle; cursor: pointer;" 
+                                            onclick="openTeacherModal('', '{{ st }}', '', 'Присутній', '', '{{ dt }}', '{{ selected_subject_id }}')">
+                                        {% if g_list %}
+                                            {% for g in g_list %}
+                                                {% set cls = 'status-present' if g.status == 'Присутній' else ('status-absent' if g.status == 'Не присутній' else ('status-retake' if g.status == 'Перездача' else 'status-postponed')) %}
+                                                <div class="cell-grade {{ cls }}" 
+                                                     onclick="event.stopPropagation(); openTeacherModal('{{ g.id }}', '{{ st }}', '{{ g.grade or '' }}', '{{ g.status }}', '{{ g.comment }}', '{{ dt }}', '{{ selected_subject_id }}')">
+                                                    {{ g.grade if g.grade else g.status }}
+                                                </div>
+                                            {% endfor %}
+                                        {% else %}
+                                            <span style="color: #ccc; display: block; width: 100%; height: 100%;">—</span>
+                                        {% endif %}
+                                    </td>
+                                    {% endfor %}
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            {% else %}
+                <p>Записів у журналі за цим предметом поки немає.</p>
+            {% endif %}
+        </div>
+
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;">
+
+        <!-- Секція 3: Форма виставлення оцінок -->
+        <div class="section">
+            <h3>Виставити оцінки</h3>
+            <form action="{{ url_for('add_grade') }}" method="POST" id="addGradeForm">
+                
+                <div class="form-group">
+                    <label for="grade_date">Оберіть дату уроку:</label>
+                    <input type="date" id="grade_date" name="grade_date" value="{{ today_date }}" max="{{ today_date }}" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="subject_id">Оберіть предмет:</label>
+                    <select name="subject_id" id="subject_id" required>
+                        {% for subj in all_subjects %}
+                            <option value="{{ subj.id }}" {% if subj.id == selected_subject_id %}selected{% endif %}>
+                                {{ subj.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <h4>Список учнів:</h4>
+                {% for st_id, st_name, st_class in students %}
+                    <div class="student-row">
+                        <input type="checkbox" name="student_ids[]" value="{{ st_id }}" id="st_{{ st_id }}">
+                        <label for="st_{{ st_id }}" style="width: 220px; font-weight: normal; margin: 0;">
+                            <strong>{{ st_name }}</strong> ({{ st_class }} клас)
+                        </label>
+
+                        <select name="status_{{ st_id }}">
+                            <option value="Присутній">Присутній</option>
+                            <option value="Не присутній">Не присутній</option>
+                            <option value="Перездача">Перездача</option>
+                            <option value="Відстрочка">Відстрочка</option>
+                        </select>
+
+                        <div class="grade-cell">
+                            <div id="gradeInputs_{{ st_id }}" class="grade-inputs-container">
+                                <div class="grade-input-row">
+                                    <input type="number" class="row-grade-input" min="1" max="12" placeholder="1-12">
+                                </div>
+                            </div>
+                            <button type="button" id="btnAddGrade_{{ st_id }}" class="btn-add-grade" style="display:none; margin-top:4px;" onclick="addRowGradeInput('{{ st_id }}')">+ Ще оцінка</button>
+                            <input type="hidden" name="grade_{{ st_id }}" id="grade_hidden_{{ st_id }}">
+                        </div>
+
+                        <input type="text" name="comment_{{ st_id }}" placeholder="Коментар" style="flex-grow: 1;">
+                    </div>
+                {% endfor %}
+
+                <button type="submit" class="btn-submit" style="margin-top: 15px;">Зберегти оцінки</button>
+            </form>
+        </div>
+</div>
+{% include '_portal_stubs.html' %}
+
+        <!-- Секції управління довідниками (Створення предметів, користувачів, класів) -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 35px;">
+            
+            <!-- Створення предмету -->
+            <div style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                <h4 style="margin-top: 0;">Додати предмет</h4>
+                <form id="createSubjectForm" onsubmit="createSubject(event)">
+                    <div class="form-group">
+                        <label for="new_subject_name">Назва предмета:</label>
+                        <input type="text" id="new_subject_name" style="width: 100%; box-sizing: border-box;" placeholder="Наприклад: Фізика" required>
+                    </div>
+                    <button type="submit" class="btn-submit" style="width: 100%;">Створити предмет</button>
+                </form>
+            </div>
+
+            <!-- Створення користувача -->
+            <div style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                <h4 style="margin-top: 0;">Створити користувача</h4>
+                <form id="createUserForm" onsubmit="createUser(event)">
+                    <div class="form-group">
+                        <label for="new_user_name">ПІБ:</label>
+                        <input type="text" id="new_user_name" style="width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 4px;" placeholder="Тарас Шевченко" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="new_user_email">Email:</label>
+                        <input type="email" id="new_user_email" style="width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 4px;" placeholder="user@example.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="new_user_password">Пароль:</label>
+                        <input type="password" id="new_user_password" style="width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #ccc; border-radius: 4px;" placeholder="******" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="new_user_role">Роль:</label>
+                        <select id="new_user_role" style="width: 100%;" onchange="toggleUserClassInput()" required>
+                            <option value="child">Учень</option>
+                            <option value="teacher">Вчитель</option>
+                            <option value="admin">Адміністратор</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="userClassGroup">
+                        <label for="new_user_class">Клас учня:</label>
+                        <input type="text" id="new_user_class" style="width: 100%; box-sizing: border-box;" placeholder="10-А">
+                    </div>
+                    <button type="submit" class="btn-submit" style="width: 100%;">Створити користувача</button>
+                </form>
+            </div>
+
+            
+
+            <!-- Створення класу 
+            <div style="background: #fff; padding: 20px; border-radius: 8px; border: 1px solid #dee2e6; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                <h4 style="margin-top: 0;">Створити клас</h4>
+                <form id="createClassForm" onsubmit="createClass(event)">
+                    <div class="form-group">
+                        <label for="new_class_name">Назва класу:</label>
+                        <input type="text" id="new_class_name" style="width: 100%; box-sizing: border-box;" placeholder="Наприклад: 11-Б" required>
+                    </div>
+                    <button type="submit" class="btn-submit" style="width: 100%;">Створити клас</button>
+                </form>
+            </div>
+            -->
+
+        </div>
+
+        <!-- Список предметів та користувачів -->
+            <div style="margin-top: 30px;">
+                <h3>Існуючі предмети</h3>
+                    <ul>
+                        {% for subject in subjects %}
+                            <li>{{ subject.fields.get('Назва предмета') }}</li>
+                        {% else %}
+                            <li>Предметів поки немає</li>
+                        {% endfor %}
+                    </ul>
+
+                <h3>Існуючі користувачі</h3>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Ім'я (Full Name)</th>
+                                <th>Логін (Email)</th>
+                                <th>Пароль</th>
+                                <th>Роль</th>
+                                <th>Дії</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in users %}
+                                <tr>
+                                    <td><strong>{{ user.fields.get('Full Name') or '—' }}</strong></td>
+                                    <td>{{ user.fields.get('Email') or '—' }}</td>
+                                    <td><code>{{ user.fields.get('Password') or '—' }}</code></td>
+                                    <td>
+                                        <span class="admin-badge" style="background: #17a2b8;">
+                                            {{ user.fields.get('Role') or '—' }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <button onclick="openEditModal('{{ user.id }}', '{{ user.fields.get('Full Name', '') }}', '{{ user.fields.get('Email', '') }}', '{{ user.fields.get('Role', '') }}')">
+                                            ✏️ Редагувати
+                                        </button>
+                                        <button onclick="deleteUser('{{ user.id }}')" style="background: #dc3545; color: white;">
+                                            🗑️ Видалити
+                                        </button>
+                                    </td>
+                                </tr>
+                            {% else %}
+                                <tr>
+                                    <td colspan="4" style="text-align: center; color: #888;">Користувачів поки немає</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+    </div>
+
+    
+
+    <!-- Модальне вікно призначення предметів вчителю -->
+    <div id="assignModal" class="modal-overlay">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeAssignModal()">&times;</span>
+            <div class="modal-header">Предмети для: <span id="assignTeacherName"></span></div>
+            <form id="assignSubjectForm" onsubmit="saveSubjectAssignment(event)">
+                <input type="hidden" id="assignTeacherId">
+                <div class="form-group" style="max-height: 250px; overflow-y: auto; padding-right: 5px;">
+                    {% for subj in all_subjects %}
+                        <div style="margin-bottom: 8px;">
+                            <label style="font-weight: normal; cursor: pointer;">
+                                <input type="checkbox" name="teacher_subjects" value="{{ subj.id }}" class="subj-checkbox">
+                                {{ subj.name }}
+                            </label>
+                        </div>
+                    {% endfor %}
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-close" onclick="closeAssignModal()">Скасувати</button>
+                    <button type="submit" class="btn-submit">Зберегти</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Модальне вікно редагування оцінки -->
+    <div id="teacherModal" class="modal-overlay">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeTeacherModal()">&times;</span>
+            <div class="modal-header">Редагувати оцінку (<span id="modalStudentName"></span>)</div>
+            <form id="editGradeForm" onsubmit="saveGradeChange(event)">
+                <input type="hidden" id="modalRecordId">
+                
+                <div class="form-group">
+                    <label>Предмет:</label>
+                    <select id="modalSubject" required>
+                        {% for subj in all_subjects %}
+                            <option value="{{ subj.id }}">{{ subj.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+    
+                <div class="form-group">
+                    <label>Дата:</label>
+                    <input type="date" id="modalDate" required>
+                </div>
+    
+                <div class="form-group">
+                    <label>Статус:</label>
+                    <select id="modalStatus" onchange="toggleModalGradeInput()">
+                        <option value="Присутній">Присутній</option>
+                        <option value="Не присутній">Не присутній</option>
+                        <option value="Перездача">Перездача</option>
+                        <option value="Відстрочка">Відстрочка</option>
+                    </select>
+                </div>
+    
+                <div class="form-group">
+                    <label>Оцінка:</label>
+                    <div id="modalGradeInputs"></div>
+                    <button type="button" id="btnAddGrade" class="btn-assign" style="display:none; margin-top:6px;" onclick="addGradeInput()">+ Додати ще одну оцінку</button>
+                </div>
+            
+                <div class="form-group">
+                    <label>Коментар вчителя:</label>
+                    <input type="text" id="modalComment" style="width: 100%;">
+                </div>
+    
+                <div class="modal-actions">
+                    <button type="button" id="btnDeleteRecord" class="btn-delete" onclick="deleteGradeRecord()">Видалити</button>
+                    <div>
+                        <button type="button" class="btn-close" onclick="closeTeacherModal()">Скасувати</button>
+                        <button type="submit" class="btn-submit">Зберегти</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Модальне вікно редагування користувача -->
+    <div id="editUserModal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:1000; justify-content:center; align-items:center;">
+        <div style="background:#fff; padding:20px; border-radius:8px; width:100%; max-width:400px; box-shadow:0 4px 6px rgba(0,0,0,0.1);">
+            <h3 style="margin-top:0;">Редагувати користувача</h3>
+
+            <input type="hidden" id="edit_user_id">
+
+            <div style="margin-bottom:12px;">
+                <label style="display:block; margin-bottom:4px; font-weight:bold;">Повне ім'я:</label>
+                <input type="text" id="edit_full_name" style="width:100%; padding:8px; box-sizing:border-box;">
+            </div>
+
+            <div style="margin-bottom:12px;">
+                <label style="display:block; margin-bottom:4px; font-weight:bold;">Email (Логін):</label>
+                <input type="email" id="edit_email" style="width:100%; padding:8px; box-sizing:border-box;">
+            </div>
+
+            <div style="margin-bottom:12px;">
+                <label style="display:block; margin-bottom:4px; font-weight:bold;">Роль:</label>
+                <select id="edit_role" style="width:100%; padding:8px; box-sizing:border-box;">
+                    <option value="admin">Admin</option>
+                    <option value="teacher">Teacher</option>
+                    <option value="child">Child (Учень)</option>
+                </select>
+            </div>
+
+            <div style="margin-bottom:16px;">
+                <label style="display:block; margin-bottom:4px; font-weight:bold;">Новий пароль (необов'язково):</label>
+                <input type="text" id="edit_password" placeholder="Залиште порожнім, щоб не змінювати" style="width:100%; padding:8px; box-sizing:border-box;">
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:8px;">
+                <button type="button" onclick="closeEditModal()" style="padding:8px 16px; background:#6c757d; color:#fff; border:none; border-radius:4px; cursor:pointer;">Скасувати</button>
+                <button type="button" onclick="saveUserChanges()" style="padding:8px 16px; background:#28a745; color:#fff; border:none; border-radius:4px; cursor:pointer;">Зберегти</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+    // --- Мультиоцінка у формі "Виставити оцінки" (масове створення) ---
+
+    // Кеш оцінок перездачі per-студент, щоб не губити їх при перемиканні статусу
+    const rowRetakeGradesCache = {};
+
+    function createRowGradeInput(value, containerEl) {
+        const row = document.createElement('div');
+        row.className = 'grade-input-row';
+
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.className = 'row-grade-input';
+        input.min = '1';
+        input.max = '12';
+        input.placeholder = '1-12';
+        if (value !== undefined && value !== null && value !== '') {
+            input.value = value;
+        }
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'btn-remove-grade';
+        removeBtn.innerText = '×';
+        removeBtn.title = 'Видалити це поле';
+        removeBtn.onclick = function() {
+            const rows = containerEl.querySelectorAll('.grade-input-row');
+            if (rows.length <= 1) return;
+            row.remove();
+            refreshRowRemoveButtons(containerEl);
+        };
+
+        row.appendChild(input);
+        row.appendChild(removeBtn);
+        return row;
+    }
+
+    function refreshRowRemoveButtons(containerEl) {
+        const rows = containerEl.querySelectorAll('.grade-input-row');
+        rows.forEach(r => {
+            const btn = r.querySelector('.btn-remove-grade');
+            btn.style.display = rows.length > 1 ? 'inline-block' : 'none';
+        });
+    }
+
+    function getRowGradeValues(stId) {
+        const container = document.getElementById('gradeInputs_' + stId);
+        const values = [];
+        container.querySelectorAll('.row-grade-input').forEach(inp => {
+            const v = inp.value.trim();
+            if (v !== '') values.push(v);
+        });
+        return values;
+    }
+
+    function setRowGradeInputs(stId, gradeStr) {
+        const container = document.getElementById('gradeInputs_' + stId);
+        container.innerHTML = '';
+        const values = (gradeStr || '').toString().split(',').map(v => v.trim()).filter(v => v !== '');
+        if (values.length === 0) {
+            container.appendChild(createRowGradeInput('', container));
+        } else {
+            values.forEach(v => container.appendChild(createRowGradeInput(v, container)));
+        }
+        refreshRowRemoveButtons(container);
+    }
+
+    function addRowGradeInput(stId) {
+        const container = document.getElementById('gradeInputs_' + stId);
+        container.appendChild(createRowGradeInput('', container));
+        refreshRowRemoveButtons(container);
+    }
+
+    function toggleRowGradeInput(stId) {
+        const select = document.querySelector('select[name="status_' + stId + '"]');
+        if (!select) return;
+        const status = select.value;
+        const container = document.getElementById('gradeInputs_' + stId);
+        const addBtn = document.getElementById('btnAddGrade_' + stId);
+        const inputs = container.querySelectorAll('.row-grade-input');
+
+        if (status === 'Не присутній') {
+            const values = getRowGradeValues(stId);
+            if (values.length > 1) rowRetakeGradesCache[stId] = values;
+            inputs.forEach(inp => { inp.value = ''; inp.disabled = true; });
+            if (addBtn) addBtn.style.display = 'none';
+        } else if (status === 'Перездача') {
+            inputs.forEach(inp => { inp.disabled = false; });
+            if (addBtn) addBtn.style.display = 'inline-block';
+            const currentValues = getRowGradeValues(stId);
+            const cached = rowRetakeGradesCache[stId];
+            if (cached && cached.length > 1 && currentValues.length < cached.length) {
+                setRowGradeInputs(stId, cached.join(', '));
+            }
+        } else {
+            inputs.forEach(inp => { inp.disabled = false; });
+            const values = getRowGradeValues(stId);
+            if (values.length > 1) rowRetakeGradesCache[stId] = values;
+            if (addBtn) addBtn.style.display = 'none';
+            setRowGradeInputs(stId, values[0] || '');
+        }
+    }
+
+    // Делеговані обробники подій для форми масового виставлення оцінок:
+    // - автовибір чекбокса учня при зміні будь-якого поля в його рядку
+    // - перемикання полів оцінки при зміні статусу
+    (function() {
+        const addGradeFormEl = document.getElementById('addGradeForm');
+        if (!addGradeFormEl) return;
+
+        addGradeFormEl.addEventListener('input', function(e) {
+            if (e.target.type === 'checkbox') return; // дозволяємо знімати галочку вручну
+            const row = e.target.closest('.student-row');
+            if (row) {
+                const checkbox = row.querySelector('input[type="checkbox"]');
+                if (checkbox) checkbox.checked = true;
+            }
+        });
+
+        addGradeFormEl.addEventListener('change', function(e) {
+            if (e.target.matches('select[name^="status_"]')) {
+                const stId = e.target.name.replace('status_', '');
+                toggleRowGradeInput(stId);
+                const checkbox = e.target.closest('.student-row').querySelector('input[type="checkbox"]');
+                if (checkbox) checkbox.checked = true;
+            }
+        });
+
+        // Перед відправкою форми переносимо значення з числових полів
+        // у приховані поля "grade_<id>" у форматі "9, 11, 12"
+        addGradeFormEl.addEventListener('submit', function() {
+            addGradeFormEl.querySelectorAll('[id^="gradeInputs_"]').forEach(container => {
+                const stId = container.id.replace('gradeInputs_', '');
+                const hidden = document.getElementById('grade_hidden_' + stId);
+                if (hidden) {
+                    hidden.value = getRowGradeValues(stId).join(', ');
+                }
+            });
+        });
+    })();
+    
+    // Створює один рядок з числовим полем оцінки (+ кнопка видалення, якщо полів декілька)
+    function createGradeRow(value) {
+        const row = document.createElement('div');
+        row.className = 'grade-input-row';
+
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.className = 'modal-grade-input';
+        input.min = '1';
+        input.max = '12';
+        input.placeholder = '1-12';
+        if (value !== undefined && value !== null && value !== '') {
+            input.value = value;
+        }
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.className = 'btn-remove-grade';
+        removeBtn.innerText = '×';
+        removeBtn.title = 'Видалити це поле';
+        removeBtn.onclick = function() { removeGradeInput(removeBtn); };
+
+        row.appendChild(input);
+        row.appendChild(removeBtn);
+        return row;
+    }
+
+    // Оновлює видимість кнопок видалення: якщо поле одне - кнопку ховаємо
+    function refreshRemoveButtons() {
+        const rows = document.querySelectorAll('#modalGradeInputs .grade-input-row');
+        rows.forEach(row => {
+            const btn = row.querySelector('.btn-remove-grade');
+            btn.style.display = rows.length > 1 ? 'inline-block' : 'none';
+        });
+    }
+
+    // Заповнює блок полів оцінок на основі рядка з Airtable ("9, 11, 12" або "10,12")
+    function setGradeInputs(gradeStr) {
+        const container = document.getElementById('modalGradeInputs');
+        container.innerHTML = '';
+
+        const values = (gradeStr || '').toString().split(',')
+            .map(v => v.trim())
+            .filter(v => v !== '');
+
+        if (values.length === 0) {
+            container.appendChild(createGradeRow());
+        } else {
+            values.forEach(v => container.appendChild(createGradeRow(v)));
+        }
+        refreshRemoveButtons();
+    }
+
+    // Додає ще одне числове поле для оцінки (кнопка "Додати ще одну оцінку")
+    function addGradeInput() {
+        const container = document.getElementById('modalGradeInputs');
+        container.appendChild(createGradeRow());
+        refreshRemoveButtons();
+    }
+
+    // Видаляє конкретне поле оцінки (лишає мінімум одне)
+    function removeGradeInput(btn) {
+        const container = document.getElementById('modalGradeInputs');
+        const rows = container.querySelectorAll('.grade-input-row');
+        if (rows.length <= 1) return;
+        btn.closest('.grade-input-row').remove();
+        refreshRemoveButtons();
+    }
+
+    // Збирає всі заповнені оцінки в рядок через кому+пробіл: "9, 11, 12"
+    function getGradeValue() {
+        const inputs = document.querySelectorAll('#modalGradeInputs .modal-grade-input');
+        const values = [];
+        inputs.forEach(inp => {
+            const v = inp.value.trim();
+            if (v !== '') values.push(v);
+        });
+        return values.join(', ');
+    }
+
+    // Поточні значення полів оцінки як масив (без пустих)
+    function getCurrentGradeValues() {
+        const inputs = document.querySelectorAll('#modalGradeInputs .modal-grade-input');
+        const values = [];
+        inputs.forEach(inp => {
+            const v = inp.value.trim();
+            if (v !== '') values.push(v);
+        });
+        return values;
+    }
+
+    // Кеш оцінок перездачі в межах відкритої модалки — щоб не губити їх
+    // при тимчасовому перемиканні статусу на "Присутній"/"Відстрочка" і назад
+    let modalRetakeGradesCache = [];
+
+    function cacheRetakeGradesIfMultiple() {
+        const values = getCurrentGradeValues();
+        if (values.length > 1) {
+            modalRetakeGradesCache = values;
+        }
+    }
+
+    function restoreRetakeGradesIfCached() {
+        const values = getCurrentGradeValues();
+        if (modalRetakeGradesCache.length > 1 && values.length < modalRetakeGradesCache.length) {
+            setGradeInputs(modalRetakeGradesCache.join(', '));
+        }
+    }
+
+    function toggleModalGradeInput() {
+        const status = document.getElementById('modalStatus').value;
+        const inputs = document.querySelectorAll('#modalGradeInputs .modal-grade-input');
+        const addBtn = document.getElementById('btnAddGrade');
+
+        if (status === 'Не присутній') {
+            cacheRetakeGradesIfMultiple();
+            inputs.forEach(inp => { inp.value = ''; inp.disabled = true; });
+            addBtn.style.display = 'none';
+        } else if (status === 'Перездача') {
+            inputs.forEach(inp => { inp.disabled = false; });
+            addBtn.style.display = 'inline-block';
+            // Повертаємо раніше введені кілька оцінок, якщо вони кешовані
+            restoreRetakeGradesIfCached();
+        } else {
+            cacheRetakeGradesIfMultiple();
+            addBtn.style.display = 'none';
+            // Поза статусом "Перездача" тимчасово показуємо лише одне поле,
+            // але кеш зберігаємо на випадок повернення до "Перездача"
+            const values = getCurrentGradeValues();
+            setGradeInputs(values[0] || '');
+        }
+    }
+    
+    function openTeacherModal(id, student, grade, status, comment, dt, subjectId) {
+        document.getElementById('modalRecordId').value = id;
+        document.getElementById('modalStudentName').innerText = student;
+
+        // Скидаємо кеш перездачі для нового запису і заповнюємо його,
+        // якщо запис одразу містить кілька оцінок
+        modalRetakeGradesCache = [];
+        const initialValues = (grade || '').toString().split(',').map(v => v.trim()).filter(v => v !== '');
+        if (initialValues.length > 1) {
+            modalRetakeGradesCache = initialValues;
+        }
+
+        setGradeInputs(grade);
+        document.getElementById('modalStatus').value = status;
+        document.getElementById('modalComment').value = comment;
+        document.getElementById('modalDate').value = dt;
+        document.getElementById('modalSubject').value = subjectId;
+    
+        toggleModalGradeInput();
+        document.getElementById('teacherModal').style.display = 'flex';
+    }
+    
+    function closeTeacherModal() {
+        document.getElementById('teacherModal').style.display = 'none';
+    }
+
+    function openAssignModal(teacherId, teacherName, assignedSubjIds) {
+        document.getElementById('assignTeacherId').value = teacherId;
+        document.getElementById('assignTeacherName').innerText = teacherName;
+
+        // Перетворюємо всі елементи масиву на рядки для коректного порівняння з cb.value
+        const idsArray = Array.isArray(assignedSubjIds) ? assignedSubjIds.map(String) : [];
+
+        document.querySelectorAll('.subj-checkbox').forEach(cb => {
+            cb.checked = idsArray.includes(String(cb.value));
+        });
+
+        document.getElementById('assignModal').style.display = 'flex';
+    }
+
+    function closeAssignModal() {
+        document.getElementById('assignModal').style.display = 'none';
+    }
+
+    function refreshFromAirtable() {
+        const btn = document.getElementById('refreshBtn');
+        const status = document.getElementById('syncStatus');
+        btn.disabled = true;
+        btn.textContent = 'Оновлення…';
+
+        fetch('/admin/refresh_cache', { method: 'POST' })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    window.location.reload();
+                } else {
+                    alert('Помилка оновлення: ' + data.message);
+                    btn.disabled = false;
+                    btn.textContent = 'Оновити з Airtable';
+                }
+            })
+            .catch(() => {
+                alert('Не вдалося звʼязатися з сервером.');
+                btn.disabled = false;
+                btn.textContent = 'Оновити з Airtable';
+            });
+    }
+
+    function saveSubjectAssignment(e) {
+        e.preventDefault();
+        const teacherId = document.getElementById('assignTeacherId').value;
+        const selectedCheckboxes = document.querySelectorAll('.subj-checkbox:checked');
+        
+        const formData = new FormData();
+        formData.append('teacher_id', teacherId);
+        selectedCheckboxes.forEach(cb => {
+            formData.append('subject_ids[]', cb.value);
+        });
+
+        fetch('/admin/assign_subject', {
+            method: 'POST',
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                window.location.reload();
+            } else {
+                alert('Помилка: ' + data.message);
+            }
+        });
+    }
+    
+    function saveGradeChange(e) {
+        e.preventDefault();
+        const recordId = document.getElementById('modalRecordId').value;
+        const status = document.getElementById('modalStatus').value;
+        const gradeValue = getGradeValue();
+
+        if (status !== 'Не присутній' && !gradeValue) {
+            alert('Вкажіть оцінку (1-12).');
+            return;
+        }
+
+        const formData = new FormData();
+
+        formData.append('record_id', recordId);
+        formData.append('grade', gradeValue);
+        formData.append('status', status);
+        formData.append('comment', document.getElementById('modalComment').value);
+        formData.append('date', document.getElementById('modalDate').value);
+        formData.append('subject_id', document.getElementById('modalSubject').value);
+        formData.append('student_name', document.getElementById('modalStudentName').innerText);
+
+        const endpoint = recordId ? '/update_grade' : '/add_single_grade';
+    
+        fetch(endpoint, {
+            method: 'POST',
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.status === 'success') {
+                window.location.reload();
+            } else {
+                alert('Помилка збереження: ' + data.message);
+            }
+        });
+    }
+
+    function deleteGradeRecord() {
+        const recordId = document.getElementById('modalRecordId').value;
+    
+        if (!recordId) return;
+
+        if (confirm('Ви дійсно бажаєте видалити цю оцінку?')) {
+            const formData = new FormData();
+            formData.append('record_id', recordId);
+
+            fetch('/delete_grade', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    window.location.reload();
+                } else {
+                    alert('Помилка видалення: ' + data.message);
+                }
+            });
+        }
+    }
+
+    function toggleUserClassInput() {
+        const role = document.getElementById('new_user_role').value;
+        const classGroup = document.getElementById('userClassGroup');
+        if (role === 'student') {
+            classGroup.style.display = 'block';
+        } else {
+            classGroup.style.display = 'none';
+        }
+    }
+
+    function createSubject(e) {
+        e.preventDefault();
+        const name = document.getElementById('new_subject_name').value;
+        const formData = new FormData();
+        formData.append('name', name);
+
+        fetch('/admin/create_subject', {
+            method: 'POST',
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                alert('Предмет успішно створено!');
+                window.location.reload();
+            } else {
+                alert('Помилка: ' + data.message);
+            }
+        });
+    }
+
+    function createUser(e) {
+        e.preventDefault();
+        const full_name = document.getElementById('new_user_name').value;
+        const email = document.getElementById('new_user_email').value;
+        const password = document.getElementById('new_user_password').value;
+        const role = document.getElementById('new_user_role').value;
+        const class_name = document.getElementById('new_user_class').value;
+
+
+
+        const formData = new FormData();
+        <!-- formData.append('full_name', fullName);
+        formData.append('email', email);
+        formData.append('password', password);
+        formData.append('role', role);
+        formData.append('class_name', class_name);
+        -->
+
+        fetch('/admin/create_user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                full_name: full_name,
+                email: email,
+                password: password,
+                role: role,
+                class_name: class_name
+            })
+        })
+
+        fetch('/admin/create_user', {
+            method: 'POST',
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                alert('Користувача успішно створено!');
+                window.location.reload();
+            } else {
+                alert('Помилка: ' + data.message);
+            }
+        });
+    }
+
+    function createClass(e) {
+        e.preventDefault();
+        const name = document.getElementById('new_class_name').value;
+        const formData = new FormData();
+        formData.append('name', name);
+
+        fetch('/admin/create_class', {
+            method: 'POST',
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                alert('Клас успішно створено!');
+                window.location.reload();
+            } else {
+                alert('Помилка: ' + data.message);
+            }
+        });
+    }
+
+    window.addEventListener('click', function(event) {
+        const tModal = document.getElementById('teacherModal');
+        const aModal = document.getElementById('assignModal');
+        if (event.target === tModal) closeTeacherModal();
+        if (event.target === aModal) closeAssignModal();
+    });
+
+    // Видалення користувача через /admin/delete_user
+    function deleteUser(userId) {
+        if (!confirm('Ви впевнені, що хочете видалити цього користувача?')) return;
+
+        fetch('/admin/delete_user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: userId })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                location.reload();
+            } else {
+                alert('Помилка видалення: ' + data.message);
+        }
+        });
+    }
+
+// Редагувати користувача (швидкий варіант через prompt)
+    function editUser(userId, currentName, currentEmail, currentRole) {
+        const newName = prompt("Введіть нове ім'я:", currentName);
+        if (newName === null) return;
+
+        const newEmail = prompt("Введіть новий Email:", currentEmail);
+        if (newEmail === null) return;
+
+        const newRole = prompt("Введіть роль (admin, teacher, child):", currentRole);
+        if (newRole === null) return;
+
+        const newPassword = prompt("Введіть новий пароль (залиште порожнім, щоб не змінювати):", "");
+
+        const payload = {
+            user_id: userId,
+            full_name: newName,
+            email: newEmail,
+            role: newRole
+        };
+        if (newPassword) payload.password = newPassword;
+
+        fetch('/admin/update_user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                location.reload();
+            } else {
+                alert('Помилка оновлення: ' + data.message);
+            }
+        });
+    }
+
+    // Відкриття модального вікна з заповненням даних
+function openEditModal(userId, currentName, currentEmail, currentRole) {
+    document.getElementById('edit_user_id').value = userId;
+    document.getElementById('edit_full_name').value = currentName;
+    document.getElementById('edit_email').value = currentEmail;
+    document.getElementById('edit_role').value = currentRole.toLowerCase();
+    document.getElementById('edit_password').value = ''; // очищаємо поле пароля
+
+    document.getElementById('editUserModal').style.display = 'flex';
+}
+
+// Закриття модалки
+    function closeEditModal() {
+        document.getElementById('editUserModal').style.display = 'none';
+    }
+
+// Збереження змін через POST-запит до /admin/update_user
+    function saveUserChanges() {
+        const userId = document.getElementById('edit_user_id').value;
+        const fullName = document.getElementById('edit_full_name').value.trim();
+        const email = document.getElementById('edit_email').value.trim();
+        const role = document.getElementById('edit_role').value;
+        const password = document.getElementById('edit_password').value.trim();
+
+        if (!fullName || !email) {
+            alert("Ім'я та Email не можуть бути порожніми!");
+            return;
+        }
+
+        const payload = {
+            user_id: userId,
+            full_name: fullName,
+            email: email,
+            role: role
+        };
+
+        if (password) {
+            payload.password = password;
+        }
+
+        fetch('/admin/update_user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'success') {
+                location.reload();
+            } else {
+                alert('Помилка оновлення: ' + data.message);
+            }
+        })
+        .catch(err => {
+            alert('Виникла помилка мережі: ' + err);
+        });
+    }
+
+    </script>
+</body>
+</html>

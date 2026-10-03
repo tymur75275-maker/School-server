@@ -5,14 +5,10 @@
     <div class="pcard {{ 'mand' if a.mandatory else '' }}" id="annCard_{{ a.id }}">
       <div class="pcard-top"><span>№{{ a.num }} · {{ a.from_name or '—' }}</span>
         {% if a.mandatory %}<span class="badge b-warn">Обов'язкове</span>{% endif %}</div>
-      <div style="font-size:12px;color:#666">Виставлено: {{ a.created }}</div>
       <div class="pcard-text">{{ a.text }}</div>
       <div style="font-size:12px;color:#666">{% if a.exp_label %}Діє до: {{ a.exp_label }}{% else %}Без обмеження терміну{% endif %}</div>
       {% if portal_role != 'student' %}
-        <div style="font-size:12px;color:#666">Кому: {{ a.to_names|join(', ') or '—' }}</div>
-        <details style="font-size:12px;color:#444"><summary style="cursor:pointer">Прочитали: {{ a.read_count }} з {{ a.to_ids|length }}</summary>
-          <div style="margin-top:4px"><b style="color:#155724">✔ Прочитали:</b> {{ a.read_names|join(', ') or '—' }}</div>
-          <div style="margin-top:4px"><b style="color:#721c24">✖ Не прочитали:</b> {{ a.unread_names|join(', ') or '—' }}</div></details>
+        <div style="font-size:12px;color:#666">Кому: {{ a.to_names|join(', ') or '—' }}<br>Прочитали: {{ a.read_count }} з {{ a.to_ids|length }}</div>
       {% endif %}
       <div class="pcard-actions">
         {% if a.for_me %}

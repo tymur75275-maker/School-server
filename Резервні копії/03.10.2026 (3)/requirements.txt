@@ -1,0 +1,7 @@
+Flask
+gunicorn
+pyairtable>=3.0
+Flask-Mail
+itsdangerous
+Werkzeug
+tzdata

@@ -1,0 +1,60 @@
+<div class="ptab-pane" id="tab-stats">
+  {% if portal_role != 'student' %}
+  <div style="display:flex;gap:18px;flex-wrap:wrap;align-items:center;margin-bottom:8px">
+    <label style="font-weight:normal"><input type="radio" name="smode" value="student" checked> За учнем</label>
+    {% if stats_subjects %}<label style="font-weight:normal"><input type="radio" name="smode" value="subject"> За предметом</label>{% endif %}
+    <select id="statsStudent" style="padding:6px">{% for n in stats_students %}<option>{{ n }}</option>{% endfor %}</select>
+    <select id="statsSubject" style="padding:6px;display:none">{% for n in stats_subjects %}<option>{{ n }}</option>{% endfor %}</select>
+  </div>
+  {% endif %}
+  <div id="statsChecks" class="stats-checks"></div>
+  <div style="position:relative;height:380px;background:#fff;border-radius:6px;padding:8px"><canvas id="statsChart"></canvas></div>
+  <p id="statsEmpty" style="display:none;color:#666">Немає числових оцінок для відображення.</p>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+(function(){
+  const ROWS={{ stats_rows|tojson }}, ROLE={{ portal_role|tojson }};
+  const PAL=['#e6194b','#3cb44b','#4363d8','#f58231','#911eb4','#008080','#9a6324','#f032e6','#808000','#000075','#46f0f0','#800000'];
+  const colors={}; let chart=null;
+  const $=id=>document.getElementById(id);
+  const uniq=a=>[...new Set(a)].sort((x,y)=>x.localeCompare(y,'uk'));
+  const color=k=>colors[k]||(colors[k]=PAL[Object.keys(colors).length%PAL.length]);
+  const mode=()=>{const r=document.querySelector('input[name=smode]:checked');return r?r.value:'student'};
+  function pick(){
+    if(ROLE==='student') return {keys:uniq(ROWS.map(r=>r.sub)),f:(r,k)=>r.sub===k,base:ROWS};
+    if(mode()==='student'){const st=$('statsStudent').value;const b=ROWS.filter(r=>r.s===st);
+      return {keys:uniq(b.map(r=>r.sub)),f:(r,k)=>r.sub===k,base:b};}
+    const sb=$('statsSubject').value;const b=ROWS.filter(r=>r.sub===sb);
+    return {keys:uniq(b.map(r=>r.s)),f:(r,k)=>r.s===k,base:b};
+  }
+  function checks(){
+    const p=pick();
+    $('statsChecks').innerHTML=p.keys.map((k,i)=>
+      '<label><input type="checkbox" checked data-k="'+encodeURIComponent(k)+'"><span class="sw" style="background:'+color(k)+'"></span>'+
+      k.replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</label>').join('');
+    $('statsChecks').querySelectorAll('input').forEach(c=>c.addEventListener('change',draw));
+    draw();
+  }
+  function draw(){
+    const p=pick();
+    const on=[...$('statsChecks').querySelectorAll('input:checked')].map(c=>decodeURIComponent(c.dataset.k));
+    const dates=uniq(p.base.filter(r=>on.some(k=>p.f(r,k))).map(r=>r.d)).sort();
+    const ds=on.map(k=>({label:k,borderColor:color(k),backgroundColor:color(k),tension:.2,spanGaps:true,
+      data:dates.map(d=>{const r=p.base.find(x=>x.d===d&&p.f(x,k));return r?r.v:null})}));
+    if(chart) chart.destroy();
+    $('statsEmpty').style.display=p.keys.length?'none':'block';
+    chart=new Chart($('statsChart'),{type:'line',data:{labels:dates,datasets:ds},
+      options:{responsive:true,maintainAspectRatio:false,scales:{y:{min:1,max:12,ticks:{stepSize:1}}},plugins:{legend:{display:false}}}});
+  }
+  document.querySelectorAll('input[name=smode]').forEach(r=>r.addEventListener('change',()=>{
+    $('statsStudent').style.display=mode()==='student'?'':'none';
+    $('statsSubject').style.display=mode()==='subject'?'':'none';checks();}));
+  ['statsStudent','statsSubject'].forEach(id=>{const e=$(id);if(e)e.addEventListener('change',checks)});
+  document.addEventListener('DOMContentLoaded',()=>{
+    checks();
+    const b=document.querySelector('.ptab-btn[data-tab=stats]');
+    if(b) b.addEventListener('click',()=>setTimeout(()=>chart&&chart.resize(),50));
+  });
+})();
+</script>

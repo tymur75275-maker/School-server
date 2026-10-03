@@ -30,7 +30,7 @@
   <script>
   function hwAnswer(id){
     const inp=document.getElementById('ans_'+id);
-    if(!inp.files.length){alert('Оберіть файли (до {{ max_upload_mb }} МБ кожен)');return}
+    if(!inp.files.length){alert('Оберіть файли (до 5 МБ кожен)');return}
     const fd=new FormData();fd.append('id',id);[...inp.files].forEach(f=>fd.append('files',f));
     portalAct('/homework/answer',fd);
   }
@@ -43,7 +43,7 @@
     <h4 id="hwTitle">Домашка</h4>
     <input type="hidden" id="hwId">
     <label>Завдання</label><textarea id="hwText" rows="4"></textarea>
-    <label>Файли завдання (до {{ max_upload_mb }} МБ кожен)</label><input type="file" id="hwFiles" multiple>
+    <label>Файли завдання (до 5 МБ кожен)</label><input type="file" id="hwFiles" multiple>
     <div id="hwExisting" style="margin-top:6px"></div>
     <label>Учні (Ctrl/Shift — кілька)</label>
     <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">

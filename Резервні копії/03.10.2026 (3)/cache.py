@@ -148,21 +148,3 @@ def upload_attachment(table_key, record_id, field, filename, content, content_ty
         _tables[table_key].upload_attachment(
             record_id, field, filename, content=content, content_type=content_type)
         return reload_record(table_key, record_id)
-
-
-def attach_url(table_key, record_id, field, url, filename):
-    """Додає файл за публічним URL (Airtable сам його завантажує; для файлів > 5 МБ)."""
-    with _lock:
-        rec = reload_record(table_key, record_id)
-        keep = [{"id": a["id"]} for a in (rec["fields"].get(field) or [])]
-        return update_record(table_key, record_id,
-                             {field: keep + [{"url": url, "filename": filename}]})
-
-
-def batch_delete(table_key, record_ids):
-    if not record_ids:
-        return
-    with _lock:
-        _tables[table_key].batch_delete(list(record_ids))
-        ids = set(record_ids)
-        _cache[table_key] = [r for r in _cache[table_key] if r["id"] not in ids]

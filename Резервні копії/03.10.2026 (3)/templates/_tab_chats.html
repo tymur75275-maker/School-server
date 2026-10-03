@@ -25,9 +25,7 @@
       {% else %}<p style="color:#666">Чатів немає.</p>{% endfor %}
     </div>
     <div class="chat-panel" id="chatPanel">
-      <div class="chat-head" style="display:flex;justify-content:space-between;gap:8px;align-items:center"><span id="chatHead"></span>
-        <span style="white-space:nowrap"><button type="button" class="pbtn pbtn-gray" style="padding:4px 8px" onclick="chatRename()">✎ Назва</button>
-        <button type="button" class="pbtn pbtn-red" style="padding:4px 8px" onclick="chatDelete()">Видалити чат</button></span></div>
+      <div class="chat-head" id="chatHead"></div>
       <div class="chat-msgs" id="chatMsgs"></div>
       <div class="chat-send" id="chatSend">
         <textarea id="chatText" rows="2" placeholder="Повідомлення..."></textarea>
@@ -49,10 +47,10 @@
   </div></div>
   <script>
   (function(){
-    let cur=null, curTitle='', timer=null, lastSig='';
+    let cur=null, timer=null, lastSig='';
     const $=id=>document.getElementById(id);
     window.chatOpen=function(d){
-      cur=d.id; curTitle=d.title||''; lastSig='';
+      cur=d.id; lastSig='';
       document.querySelectorAll('.chat-item').forEach(e=>e.classList.toggle('active',e.dataset.id===cur));
       $('chatHead').textContent=(d.title||d.with)+' — '+d.with;
       $('chatSend').style.display=d.member?'flex':'none';
@@ -64,7 +62,7 @@
       const id=cur;
       fetch('/chats/'+id+'/messages').then(r=>r.json()).then(j=>{
         if(!j.ok||id!==cur) return;
-        const sig=j.messages.map(m=>m.id+m.text).join('|');
+        const sig=j.messages.map(m=>m.id).join(',');
         if(sig===lastSig) return; lastSig=sig;
         const box=$('chatMsgs'); const atEnd=scroll||box.scrollHeight-box.scrollTop-box.clientHeight<60;
         box.innerHTML='';
@@ -72,16 +70,7 @@
           const d=document.createElement('div'); d.className='chat-msg'+(m.mine?' mine':'');
           const s=document.createElement('small'); s.textContent=m.from_name+' · '+m.time;
           const t=document.createElement('span'); t.textContent=m.text;
-          d.append(s,t);
-          if(m.can_edit){
-            const a=document.createElement('div');a.style.cssText='font-size:12px;margin-top:4px';
-            const e=document.createElement('a');e.href='#';e.textContent='✎ ';e.title='Редагувати';
-            e.onclick=ev=>{ev.preventDefault();msgEdit(m)};
-            const x=document.createElement('a');x.href='#';x.textContent='✕';x.title='Видалити';x.style.color='#dc3545';
-            x.onclick=ev=>{ev.preventDefault();msgDel(m)};
-            a.append(e,x);d.appendChild(a);
-          }
-          box.appendChild(d);
+          d.append(s,t); box.appendChild(d);
         });
         if(atEnd) box.scrollTop=box.scrollHeight;
       });
@@ -89,24 +78,6 @@
     window.chatSendMsg=function(){
       const t=$('chatText').value.trim(); if(!t||!cur) return;
       portalPost('/chats/send',portalFD({chat_id:cur,text:t})).then(ok=>{if(ok){$('chatText').value='';load(true)}});
-    };
-    function msgEdit(m){
-      const t=prompt('Редагувати повідомлення',m.text);
-      if(t===null||!t.trim()) return;
-      portalPost('/chats/msg_edit',portalFD({id:m.id,text:t})).then(ok=>{if(ok){lastSig='';load(false)}});
-    }
-    function msgDel(m){
-      if(!confirm('Видалити повідомлення?')) return;
-      portalPost('/chats/msg_delete',portalFD({id:m.id})).then(ok=>{if(ok){lastSig='';load(false)}});
-    }
-    window.chatRename=function(){
-      const t=prompt('Нова назва чату',curTitle);
-      if(t===null||!t.trim()) return;
-      portalAct('/chats/rename',portalFD({chat_id:cur,title:t}));
-    };
-    window.chatDelete=function(){
-      if(cur&&confirm('Видалити весь чат разом з усіма повідомленнями?'))
-        portalAct('/chats/delete',portalFD({chat_id:cur}));
     };
     window.chatCreate=function(){
       portalAct('/chats/create',portalFD({to:$('chatTo').value,title:$('chatTitle').value,text:$('chatFirst').value}));
