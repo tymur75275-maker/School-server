@@ -1,0 +1,88 @@
+<div class="ptab-pane" id="tab-homework">
+  {% if portal_role != 'student' %}<button type="button" class="pbtn pbtn-green" onclick="hwOpen()">+ Нова домашка</button>{% endif %}
+  <div class="cards">
+    {% for h in homework_list %}
+    <div class="pcard">
+      <div class="pcard-top"><span>№{{ h.num }}</span></div>
+      {% if portal_role != 'student' %}<div style="font-size:13px"><b>Учні:</b> {{ h.student_names|join(', ') or '—' }}</div>{% endif %}
+      <div class="pcard-text">{{ h.text }}</div>
+      {% if h.task_files %}<div><b>Файли завдання:</b>
+        {% for a in h.task_files %}<div>📎 <a href="/homework/file/{{ h.id }}/task/{{ a.id }}" target="_blank">{{ a.name }}</a>
+          {% if portal_role != 'student' %}<a href="#" title="Видалити файл" style="color:#dc3545;text-decoration:none" onclick="hwDelFile('{{ h.id }}','task','{{ a.id }}');return false">✕</a>{% endif %}</div>{% endfor %}</div>{% endif %}
+      <div><b>Відповідь{% if portal_role == 'student' %} (мої файли){% endif %}:</b>
+        {% for a in h.answer_files %}<div>📎 <a href="/homework/file/{{ h.id }}/answer/{{ a.id }}" target="_blank">{{ a.name }}</a>
+          <a href="#" title="Видалити файл" style="color:#dc3545;text-decoration:none" onclick="hwDelFile('{{ h.id }}','answer','{{ a.id }}');return false">✕</a></div>
+        {% else %}<span style="color:#888">файлів немає</span>{% endfor %}</div>
+      {% if portal_role == 'student' %}
+      <div class="pcard-actions" style="align-items:center">
+        <input type="file" multiple id="ans_{{ h.id }}" style="max-width:100%">
+        <button type="button" class="pbtn pbtn-green" onclick="hwAnswer('{{ h.id }}')">Прикріпити відповідь</button>
+      </div>
+      {% else %}
+      <div class="pcard-actions">
+        <button type="button" class="pbtn" data-id="{{ h.id }}" data-text="{{ h.text }}" data-students="{{ h.student_ids|join(',') }}" data-files='{{ h.task_files|tojson }}' onclick="hwOpen(this.dataset)">Редагувати</button>
+        <button type="button" class="pbtn pbtn-red" onclick="if(confirm('Видалити домашку?'))portalAct('/homework/delete',portalFD({id:'{{ h.id }}'}))">Видалити</button>
+      </div>
+      {% endif %}
+    </div>
+    {% else %}<p style="color:#666">Домашок немає.</p>{% endfor %}
+  </div>
+  <script>
+  function hwAnswer(id){
+    const inp=document.getElementById('ans_'+id);
+    if(!inp.files.length){alert('Оберіть файли (до {{ max_upload_mb }} МБ кожен)');return}
+    const fd=new FormData();fd.append('id',id);[...inp.files].forEach(f=>fd.append('files',f));
+    portalAct('/homework/answer',fd);
+  }
+  function hwDelFile(id,field,att){
+    if(confirm('Видалити файл?')) portalAct('/homework/file_delete',portalFD({id:id,field:field,att:att}));
+  }
+  </script>
+  {% if portal_role != 'student' %}
+  <div class="pm-overlay" id="hwModal"><div class="pm-box">
+    <h4 id="hwTitle">Домашка</h4>
+    <input type="hidden" id="hwId">
+    <label>Завдання</label><textarea id="hwText" rows="4"></textarea>
+    <label>Файли завдання (до {{ max_upload_mb }} МБ кожен)</label><input type="file" id="hwFiles" multiple>
+    <div id="hwExisting" style="margin-top:6px"></div>
+    <label>Учні (Ctrl/Shift — кілька)</label>
+    <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+      {% for c in portal_students|map(attribute='cls')|select|unique|sort %}<button type="button" class="pbtn pbtn-gray" onclick="hwPick('{{ c }}')">Клас {{ c }}</button>{% endfor %}
+      <button type="button" class="pbtn pbtn-gray" onclick="hwPick('*')">Усі</button>
+      <button type="button" class="pbtn pbtn-gray" onclick="hwPick('')">Очистити</button>
+    </div>
+    <select id="hwStudents" multiple size="8">{% for s in portal_students %}<option value="{{ s.id }}" data-cls="{{ s.cls }}">{{ s.name }}{% if s.cls %} ({{ s.cls }}){% endif %}</option>{% endfor %}</select>
+    <div class="pm-actions">
+      <button type="button" class="pbtn pbtn-gray" onclick="document.getElementById('hwModal').style.display='none'">Скасувати</button>
+      <button type="button" class="pbtn pbtn-green" onclick="hwSave()">Зберегти</button>
+    </div>
+  </div></div>
+  <script>
+  function hwOpen(d){
+    const $=id=>document.getElementById(id); d=d||{};
+    $('hwId').value=d.id||''; $('hwTitle').textContent=d.id?'Редагувати домашку':'Нова домашка';
+    $('hwText').value=d.text||''; $('hwFiles').value='';
+    const sel=(d.students||'').split(',');
+    [...$('hwStudents').options].forEach(o=>o.selected=sel.includes(o.value));
+    const box=$('hwExisting'); box.innerHTML='';
+    (d.files?JSON.parse(d.files):[]).forEach(a=>{
+      const l=document.createElement('label');l.style.fontWeight='normal';
+      const c=document.createElement('input');c.type='checkbox';c.value=a.id;c.className='hwRm';
+      l.append(c,' Видалити: '+a.name);box.appendChild(l);
+    });
+    $('hwModal').style.display='flex';
+  }
+  function hwPick(c){
+    [...document.getElementById('hwStudents').options].forEach(o=>o.selected=c==='*'||(c&&o.dataset.cls===c));
+  }
+  function hwSave(){
+    const $=id=>document.getElementById(id); const fd=new FormData();
+    fd.append('id',$('hwId').value);fd.append('text',$('hwText').value);
+    [...$('hwStudents').selectedOptions].forEach(o=>fd.append('students',o.value));
+    [...$('hwFiles').files].forEach(f=>fd.append('files',f));
+    document.querySelectorAll('.hwRm:checked').forEach(c=>fd.append('remove',c.value));
+    portalAct('/homework/save',fd);
+  }
+  </script>
+  {% endif %}
+</div>
