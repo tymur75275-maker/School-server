@@ -63,7 +63,7 @@
                 {% else %}
                     <span id="syncStatus" style="font-size: 12px; color: #666;"></span>
                 {% endif %}
-                <button type="button" onclick="refreshFromAirtable()" id="refreshBtn" class="btn-assign" style="background:#20c997;">Оновити з Airtable</button>
+                <button type="button" onclick="refreshFromSupabase()" id="refreshBtn" class="btn-assign" style="background:#20c997;">Оновити з Supabase</button>
                 <span style="font-weight: bold;">{{ email }}</span>
                 <a href="{{ url_for('logout') }}" class="btn-logout">Вийти</a>
             </div>
@@ -644,7 +644,7 @@
         });
     }
 
-    // Заповнює блок полів оцінок на основі рядка з Airtable ("9, 11, 12" або "10,12")
+    // Заповнює блок полів оцінок на основі рядка з Supabase ("9, 11, 12" або "10,12")
     function setGradeInputs(gradeStr) {
         const container = document.getElementById('modalGradeInputs');
         container.innerHTML = '';
@@ -785,7 +785,7 @@
         document.getElementById('assignModal').style.display = 'none';
     }
 
-    function refreshFromAirtable() {
+    function refreshFromSupabase() {
         const btn = document.getElementById('refreshBtn');
         const status = document.getElementById('syncStatus');
         btn.disabled = true;
@@ -799,13 +799,13 @@
                 } else {
                     alert('Помилка оновлення: ' + data.message);
                     btn.disabled = false;
-                    btn.textContent = 'Оновити з Airtable';
+                    btn.textContent = 'Оновити з Supabase';
                 }
             })
             .catch(() => {
                 alert('Не вдалося звʼязатися з сервером.');
                 btn.disabled = false;
-                btn.textContent = 'Оновити з Airtable';
+                btn.textContent = 'Оновити з Supabase';
             });
     }
 

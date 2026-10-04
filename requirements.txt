@@ -1,6 +1,6 @@
 Flask
 gunicorn
-pyairtable>=3.0
+supabase>=2.0
 Flask-Mail
 itsdangerous
 Werkzeug

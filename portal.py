@@ -1,12 +1,11 @@
 """Вкладки кабінетів: Статистика, Догани, Оголошення (етап 2)."""
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from functools import wraps
 from zoneinfo import ZoneInfo
 
 import os
 import secrets
 import tempfile
-from urllib.parse import quote
 
 from flask import Blueprint, request, session, jsonify, redirect, send_file
 
@@ -537,11 +536,11 @@ def chat_delete():
 
 
 # ---------- домашки ----------
-MAX_DIRECT = 5 * 1024 * 1024                       # ліміт прямого завантаження в Airtable
-MAX_MB = int(os.environ.get('MAX_UPLOAD_MB', '100'))  # ліміт одного файлу на сайті
+MAX_MB = int(os.environ.get('MAX_UPLOAD_MB', '10'))  # ліміт одного файлу (безкоштовний Supabase — максимум 50 МБ)
+MAX_ANSWER_FILES = int(os.environ.get('MAX_ANSWER_FILES', '5'))  # файлів-відповідей від одного учня на домашку
+STORAGE_LIMIT_MB = int(os.environ.get('STORAGE_LIMIT_MB', '1024'))  # квота Storage (free = 1 ГБ), для індикатора
 TMP_DIR = os.path.join(tempfile.gettempdir(), 'school_uploads')
 os.makedirs(TMP_DIR, exist_ok=True)
-_TMP = {}   # token -> (шлях, ім'я, mime) — тимчасові публічні посилання для Airtable
 F_TASK, F_ANS = 'Завдання файл', 'Відповідь файли'
 
 
@@ -601,41 +600,10 @@ def _cleanup(files):
             pass
 
 
-def _public_base():
-    base = os.environ.get('PUBLIC_BASE_URL', '').rstrip('/')
-    if base:
-        return base
-    proto = request.headers.get('X-Forwarded-Proto', request.scheme)
-    host = request.headers.get('X-Forwarded-Host', request.host)
-    if host.startswith(('localhost', '127.', '192.168.', '10.', '0.0.0.0')):
-        raise ValueError('Файли понад 5 МБ можна завантажувати лише тоді, коли сайт доступний з інтернету '
-                         '(наприклад, на Render) або задано PUBLIC_BASE_URL.')
-    return f'{proto}://{host}'
-
-
 def _upload(rid, field, files, prefix=''):
     for name, path, ctype, size in files:
-        full = prefix + name
-        if size <= MAX_DIRECT:
-            with open(path, 'rb') as fh:
-                cache.upload_attachment('homework', rid, field, full, fh.read(), ctype)
-        else:
-            token = secrets.token_hex(16)
-            _TMP[token] = (path, full, ctype)
-            try:
-                url = f'{_public_base()}/tmpfile/{token}/{quote(full)}'
-                cache.attach_url('homework', rid, field, url, full)
-            finally:
-                _TMP.pop(token, None)
-
-
-@bp.route('/tmpfile/<token>/<path:name>')
-def tmpfile(token, name):
-    """Одноразове посилання, за яким Airtable забирає великий файл."""
-    it = _TMP.get(token)
-    if not it:
-        return 'Not found', 404
-    return send_file(it[0], mimetype=it[2], as_attachment=True, download_name=it[1])
+        with open(path, 'rb') as fh:
+            cache.upload_attachment('homework', rid, field, prefix + name, fh, ctype)
 
 
 @bp.route('/homework/save', methods=['POST'])
@@ -705,6 +673,10 @@ def hw_answer():
         return err(str(e))
     if not files:
         return err('Оберіть файли')
+    mine = len([a for a in _atts(rec['fields'], F_ANS) if a['name'].startswith(f'[{name}] ')])
+    if mine + len(files) > MAX_ANSWER_FILES:
+        _cleanup(files)
+        return err(f'Можна прикріпити максимум {MAX_ANSWER_FILES} файлів (уже є {mine}). Видаліть зайві.')
     try:
         _upload(hid, F_ANS, files, prefix=f'[{name}] ')
     except Exception as e:
@@ -740,14 +712,77 @@ def hw_file_delete():
     return jsonify(ok=True)
 
 
+def admin_only(fn):
+    @wraps(fn)
+    def w(*a, **k):
+        if session.get('role') != 'admin':
+            return err('Доступ заборонено', 403)
+        return fn(*a, **k)
+    return w
+
+
+def build_file_manager():
+    rows = cache.file_report()
+    nums = {r['id']: cv(r['fields'].get('№')) for r in cache.get_homework()}
+    for r in rows:
+        r['num'] = nums.get(r['hw'], '?')
+        r['kind'] = 'task' if r['field'] == F_TASK else 'answer'
+        r['key'] = f"{r['hw']}|{r['field']}|{r['id']}"
+        r['mb'] = round(r['size'] / 1048576, 2)
+        r['date'] = (r['uploaded'] or '')[:10] or '—'
+    rows.sort(key=lambda r: r['size'], reverse=True)
+    used = sum(r['size'] for r in rows) / 1048576
+    return {'files': rows, 'used_mb': round(used, 1), 'limit_mb': STORAGE_LIMIT_MB,
+            'pct': min(100, round(used / STORAGE_LIMIT_MB * 100)) if STORAGE_LIMIT_MB else 0}
+
+
+@bp.route('/homework/files_delete', methods=['POST'])
+@login_only
+@admin_only
+def hw_files_delete():
+    items = [tuple(x.split('|', 2)) for x in request.form.getlist('items') if x.count('|') == 2]
+    try:
+        n = cache.delete_files(items)
+    except Exception as e:
+        return err(str(e), 500)
+    return jsonify(ok=True, deleted=n)
+
+
+@bp.route('/homework/files_old', methods=['POST'])
+@login_only
+@admin_only
+def hw_files_old():
+    try:
+        days = max(1, int(request.form.get('days', '0')))
+    except ValueError:
+        return err('Вкажіть кількість днів')
+    cut = (datetime.utcnow() - timedelta(days=days)).strftime('%Y-%m-%dT%H:%M:%S')
+    items = [(r['hw'], r['field'], r['id']) for r in cache.file_report() if r['uploaded'] and r['uploaded'] < cut]
+    try:
+        n = cache.delete_files(items)
+    except Exception as e:
+        return err(str(e), 500)
+    return jsonify(ok=True, deleted=n)
+
+
+@bp.route('/homework/orphans', methods=['POST'])
+@login_only
+@admin_only
+def hw_orphans():
+    try:
+        cache.clean_orphans()
+    except Exception as e:
+        return err(str(e), 500)
+    return jsonify(ok=True)
+
+
 @bp.route('/homework/file/<rid>/<field>/<att>')
 @login_only
 def hw_file(rid, field, att):
     role = session.get('role')
     key = F_TASK if field == 'task' else F_ANS
-    try:
-        rec = cache.reload_record('homework', rid)   # свіжі URL вкладень
-    except Exception:
+    rec = next((r for r in cache.get_homework() if r['id'] == rid), None)
+    if not rec:
         return 'Не знайдено', 404
     target = next((a for a in (rec['fields'].get(key) or []) if a.get('id') == att), None)
     if not target:
@@ -758,7 +793,16 @@ def hw_file(rid, field, att):
             return 'Доступ заборонено', 403
         if key == F_ANS and not (target.get('filename') or '').startswith(f'[{name}] '):
             return 'Доступ заборонено', 403
-    return redirect(target['url'])
+    try:
+        path = cache.local_file(target)
+    except Exception:
+        path = None
+    if not path:
+        return 'Файл недоступний у сховищі — завантажте його заново', 404
+    resp = send_file(path, mimetype=target.get('type') or 'application/octet-stream',
+                     download_name=target.get('filename') or 'файл', conditional=True)
+    resp.headers['Cache-Control'] = 'private, max-age=3600'   # браузер теж кешує на годину
+    return resp
 
 
 # ---------- контекст для шаблонів ----------
@@ -801,4 +845,5 @@ def portal_context(role, email):
             if u['id'] != me_id and (staff or str(cv(u['fields'].get('Role')) or '').lower() in ('teacher', 'admin'))],
         'homework_list': build_homework(role, st_rec, student_name(email, st_rec), email),
         'max_upload_mb': MAX_MB,
+        'file_mgr': build_file_manager() if role == 'admin' else None,
     }

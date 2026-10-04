@@ -1,6 +1,6 @@
 import os
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
-from pyairtable import Api
+from supabase import create_client
 from datetime import date
 from flask_mail import Mail, Message
 from itsdangerous import URLSafeTimedSerializer, SignatureExpired, BadTimeSignature
@@ -22,27 +22,16 @@ app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
 mail = Mail(app)
 serializer = URLSafeTimedSerializer(app.secret_key)
 
-# Отримуємо ключі з змінних оточення Render
-AIRTABLE_API_KEY = os.environ.get('AIRTABLE_API_KEY')
-AIRTABLE_BASE_ID = os.environ.get('AIRTABLE_BASE_ID')
+# Ключі Supabase зі змінних оточення (Render / .env).
+# SUPABASE_SERVICE_KEY — service_role (secret) ключ. Тримати ТІЛЬКИ на сервері:
+# в таблицях увімкнено RLS, і саме цей ключ дозволяє серверу читати/писати.
+SUPABASE_URL = os.environ.get('SUPABASE_URL')
+SUPABASE_SERVICE_KEY = os.environ.get('SUPABASE_SERVICE_KEY')
+supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
-# Підключаємося до Airtable
-api = Api(AIRTABLE_API_KEY)
-grades_table = api.table(AIRTABLE_BASE_ID, 'Оцінки')
-users_table = api.table(AIRTABLE_BASE_ID, 'Users')
-subjects_table = api.table(AIRTABLE_BASE_ID, 'Предмети')
-students_table = api.table(AIRTABLE_BASE_ID, 'Учні')
-discipline_table = api.table(AIRTABLE_BASE_ID, 'Догани')
-announcements_table = api.table(AIRTABLE_BASE_ID, 'Оголошення')
-messages_table = api.table(AIRTABLE_BASE_ID, 'Повідомлення')
-chats_table = api.table(AIRTABLE_BASE_ID, 'Чати')
-homework_table = api.table(AIRTABLE_BASE_ID, 'Домашки')
-
-# Один раз при старті процесу підтягуємо всі 4 таблиці в оперативку.
-# Далі всі GET-сторінки читають ЛИШЕ з cache.get_*(), без звернень до Airtable.
-cache.init_cache(users_table, students_table, subjects_table, grades_table,
-                 discipline_table, announcements_table,
-                 messages_table, chats_table, homework_table)
+# Один раз при старті процесу підтягуємо всі таблиці в оперативку.
+# Далі всі GET-сторінки читають ЛИШЕ з cache.get_*(), без звернень до Supabase.
+cache.init_cache(supabase)
 
 
 def clean_value(val):
@@ -79,7 +68,7 @@ def login():
         email = request.form.get('email', '').strip()
         password = request.form.get('password', '').strip()
         
-        # Шукаємо користувача в кеші (без запиту в Airtable)
+        # Шукаємо користувача в кеші (без запиту в Supabase)
         records = [u for u in cache.get_users() if str(clean_value(u['fields'].get('Email'))) == email]
 
         if records:
@@ -244,9 +233,9 @@ def admin_page():
 
 @app.route('/admin/refresh_cache', methods=['POST'])
 def admin_refresh_cache():
-    """Ручне підтягування даних з Airtable в оперативку.
+    """Ручне підтягування даних з Supabase в оперативку.
 
-    Викликати, коли щось редагували напряму в Airtable (або іншим
+    Викликати, коли щось редагували напряму в Supabase (або іншим
     сервісом) і хочуть, щоб сайт це побачив без перезапуску процесу.
     """
     if session.get('role') != 'admin':
@@ -735,7 +724,7 @@ def delete_grade():
         if not record_id:
             return {'status': 'error', 'message': 'ID запису відсутній'}, 400
 
-        # Видалення запису (з Airtable і з кешу)
+        # Видалення запису (з Supabase і з кешу)
         cache.delete_record('grades', record_id)
         return {'status': 'success'}
 
