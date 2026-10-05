@@ -302,6 +302,7 @@ def build_stats(role, email, st_rec):
     name = str(cv(st_rec['fields'].get("Ім'я учня")) or '') if st_rec else ''
     agg = {}
     gids = {s['id'] for s in cache.get_students() if s['fields'].get('Оцінюється')}
+    mine = set(staff_subject_names(role, email)) if role == 'teacher' else None   # вчитель бачить лише свої предмети
     for rec in cache.get_grades():
         f = rec['fields']
         if not gids.intersection(f.get('Учень') or []):
@@ -311,6 +312,8 @@ def build_stats(role, email, st_rec):
             continue
         subj = str(cv(f.get('Назва предмета')) or cv(f.get('Предмет')) or '')
         d = str(cv(f.get('Дата виставлення оцінки')) or cv(f.get('Дата')) or '')
+        if mine is not None and subj not in mine:
+            continue
         nums = _nums(cv(f.get('Оцінка')))
         if not (st and subj and d and nums):
             continue
