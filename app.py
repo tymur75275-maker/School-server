@@ -34,6 +34,15 @@ supabase = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 cache.init_cache(supabase)
 
 
+def graded_ids():
+    """ID учнів, які мають галочку «Оцінюється» (лише вони беруть участь в оцінюванні)."""
+    return {s['id'] for s in cache.get_students() if s['fields'].get('Оцінюється')}
+
+
+def student_of_user(user_id):
+    return next((s for s in cache.get_students() if user_id in (s['fields'].get('Учень') or [])), None)
+
+
 def clean_value(val):
     """Якщо значення прийшло як список ['...'], витягуємо перший елемент"""
     if isinstance(val, list) and len(val) > 0:
@@ -140,6 +149,7 @@ def admin_page():
 
     # 2. Отримуємо оцінки для вибраного предмета
     all_grades = cache.get_grades()
+    gids = graded_ids()
     students_set = set()
     dates_set = set()
     raw_grades = []
@@ -155,7 +165,7 @@ def admin_page():
             status = clean_value(f.get('Статус'))
             comment = clean_value(f.get('Коментар вчителя'))
 
-            if student:
+            if student and gids.intersection(f.get('Учень') or []):
                 students_set.add(str(student))
                 dates_set.add(str(dt_val))
                 raw_grades.append({
@@ -181,7 +191,7 @@ def admin_page():
         st_id = st['id']
         st_name = clean_value(st['fields'].get("Ім'я учня"))
         st_class = clean_value(st['fields'].get("Клас"))
-        if st_name:
+        if st_name and st['fields'].get('Оцінюється'):
             students_list.append((st_id, st_name, st_class))
 
     students_list = sorted(students_list, key=lambda x: x[1])
@@ -227,6 +237,8 @@ def admin_page():
         grades=grades,
         subjects=subjects,
         last_sync=cache.get_last_sync(),
+        user_students={uid: {'cls': str(clean_value(s['fields'].get('Клас')) or ''), 'graded': bool(s['fields'].get('Оцінюється'))}
+                       for s in students for uid in (s['fields'].get('Учень') or [])},
         **portal_context('admin', admin_email),
     )
 
@@ -379,6 +391,7 @@ def teacher_dashboard():
 
     # 2. Отримуємо оцінки ЛИШЕ для вибраного предмета цього вчителя
     all_grades = cache.get_grades()
+    gids = graded_ids()
     students_set = set()
     dates_set = set()
     raw_grades = []
@@ -398,7 +411,7 @@ def teacher_dashboard():
             status = clean_value(f.get('Статус'))
             comment = clean_value(f.get('Коментар вчителя'))
 
-            if student:
+            if student and gids.intersection(f.get('Учень') or []):
                 students_set.add(str(student))
                 dates_set.add(str(dt_val))
                 raw_grades.append({
@@ -425,7 +438,7 @@ def teacher_dashboard():
         st_id = st['id']
         st_name = clean_value(st['fields'].get("Ім'я учня"))
         st_class = clean_value(st['fields'].get("Клас"))
-        if st_name:
+        if st_name and st['fields'].get('Оцінюється'):
             students_list.append((st_id, st_name, st_class))
 
     today_str = date.today().isoformat()
@@ -457,6 +470,7 @@ def admin_create_user():
     role = data.get('role')  # 'admin', 'teacher', або 'child'
     password = data.get('password')
     class_name = data.get('class_name')  # Якщо створюємо учня
+    is_graded = bool(data.get('is_graded'))
 
     if not full_name or not email or not role or not password:
         return jsonify({'status': 'error', 'message': 'Усі обов’язкові поля мають бути заповнені'}), 400
@@ -479,6 +493,8 @@ def admin_create_user():
         }
         if class_name:
             student_fields['Клас'] = class_name
+        if is_graded:
+            student_fields['Оцінюється'] = True
         cache.create_record('students', student_fields)
 
     return jsonify({'status': 'success', 'user': new_user})
@@ -512,6 +528,22 @@ def admin_update_user():
         update_fields['Password'] = password
 
     updated_user = cache.update_record('users', user_id, update_fields)
+
+    # Дані учня: клас і галочка «Оцінюється» (лише для ролі child)
+    final_role = str(role or (updated_user['fields'].get('Role') or '')).lower()
+    if final_role == 'child' and ('class_name' in data or 'is_graded' in data):
+        st = student_of_user(user_id)
+        st_fields = {}
+        if 'class_name' in data:
+            st_fields['Клас'] = (data.get('class_name') or '').strip() or None
+        if 'is_graded' in data:
+            st_fields['Оцінюється'] = bool(data.get('is_graded'))
+        if st:
+            cache.update_record('students', st['id'], st_fields)
+        else:
+            cache.create_record('students', {
+                "Ім'я учня": updated_user['fields'].get('Full Name') or '',
+                'Учень': [user_id], **st_fields})
     return jsonify({'status': 'success', 'user': updated_user})
 
 
@@ -629,11 +661,14 @@ def add_grade():
             return f"<h3>Помилка: Не обрано предмет або не вибрано жодного учня!</h3><br><a href='/teacher'>Повернутися назад</a>", 400
 
         records_to_create = []
+        gids = graded_ids()
 
         for st_id in student_ids:
             st_id = str(st_id).strip()
             if not st_id:
                 continue
+            if st_id not in gids:
+                return "<h3>Помилка: цей учень не оцінюється (немає галочки «Оцінюється»)!</h3><br><a href='/teacher'>Повернутися назад</a>", 400
 
             status = request.form.get(f'status_{st_id}', 'Присутній')
             grade_val = request.form.get(f'grade_{st_id}', '').strip()
@@ -744,7 +779,10 @@ def add_single_grade():
     students = [
         s for s in cache.get_students()
         if str(clean_value(s['fields'].get("Ім'я учня"))) == str(student_name)
+        and s['fields'].get('Оцінюється')
     ]
+    if not students:
+        return jsonify({'status': 'error', 'message': 'Учень не оцінюється'}), 400
     
     fields = {
         'Предмет': [subject_id],
