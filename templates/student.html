@@ -76,6 +76,7 @@
         </div>
 
 {% include '_portal_tabs.html' %}
+{% if show_grades %}
 <div class="ptab-pane active" id="tab-grades">
         <h3>Мої оцінки</h3>
 
@@ -117,6 +118,7 @@
             <p>Наразі у вас немає виставлених оцінок.</p>
         {% endif %}
 </div>
+{% endif %}
 {% include '_portal_stubs.html' %}
     </div>
     <!-- Модальне вікно перегляду деталізації оцінки -->

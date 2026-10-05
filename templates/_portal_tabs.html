@@ -24,8 +24,8 @@
 .ptab-stub{color:#666;padding:20px;background:#fff;border-radius:6px}
 </style>
 <div class="ptabs">
-  <button type="button" class="ptab-btn" data-tab="grades">Оцінки</button>
-  <button type="button" class="ptab-btn" data-tab="stats">Статистика</button>
+  {% if show_grades %}<button type="button" class="ptab-btn" data-tab="grades">Оцінки</button>
+  <button type="button" class="ptab-btn" data-tab="stats">Статистика</button>{% endif %}
   <button type="button" class="ptab-btn" data-tab="discipline">Догани</button>
   <button type="button" class="ptab-btn" data-tab="chats">Чати</button>
   <button type="button" class="ptab-btn" data-tab="announcements">Оголошення</button>
@@ -41,7 +41,7 @@ function portalPost(url,data){
 function portalAct(url,data){return portalPost(url,data).then(ok=>{if(ok)location.reload()})}
 function portalFD(o){const fd=new FormData();for(const k in o)fd.append(k,o[k]);return fd}
 function showPortalTab(name){
-  if(!document.getElementById('tab-'+name)) name='grades';
+  if(!document.getElementById('tab-'+name)){const fb=document.querySelector('.ptab-btn');name=fb?fb.dataset.tab:'grades'}
   document.querySelectorAll('.ptab-pane').forEach(p=>p.classList.toggle('active',p.id==='tab-'+name));
   document.querySelectorAll('.ptab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
   history.replaceState(null,'','#'+name);
