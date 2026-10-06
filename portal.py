@@ -363,6 +363,24 @@ def _local(created, full=False):
     return d.astimezone(TZ).strftime('%d.%m.%Y %H:%M' if full else '%d.%m %H:%M') if d else ''
 
 
+def _chat(cid):
+    return next((c for c in cache.get_chats() if c['id'] == cid), None)
+
+
+def chat_parts(chat, msgs):
+    """Учасники: у груповому чаті — список «Учасники», у звичайному — з повідомлень."""
+    if chat and chat['fields'].get('Група'):
+        return lst(chat['fields'].get('Учасники'))
+    return participants(msgs)
+
+
+def _can_manage(chat, me_id, role):
+    """Перейменувати/видалити груповий чат може лише адмін або його автор."""
+    if not chat or not chat['fields'].get('Група'):
+        return True
+    return role == 'admin' or me_id in lst(chat['fields'].get('Автор'))
+
+
 def build_chats(role, me_id):
     names = user_names()
     by = {}
@@ -371,29 +389,32 @@ def build_chats(role, me_id):
             by.setdefault(cid, []).append(m)
     out = []
     for c in cache.get_chats():
-        msgs = by.get(c['id'])
-        if not msgs:
+        msgs = by.get(c['id']) or []
+        group = bool(c['fields'].get('Група'))
+        if not msgs and not group:
             continue
         msgs.sort(key=lambda m: (m.get('createdTime', ''), _num(m)))
-        parts = participants(msgs)
+        parts = chat_parts(c, msgs)
         member = me_id in parts
         if role != 'admin' and not member:
             continue
         who = [names.get(p, '?') for p in parts if p != me_id] if member else [names.get(p, '?') for p in parts]
-        last = msgs[-1]
+        last = msgs[-1] if msgs else None
         out.append({'id': c['id'], 'title': str(c['fields'].get('Назва чату') or ''),
-                    'with': ', '.join(who), 'member': member,
-                    'last_text': str(last['fields'].get('Текст') or '')[:60],
-                    'last_time': _local(last.get('createdTime')),
-                    'sort': last.get('createdTime', '')})
+                    'with': ', '.join(who), 'member': member, 'group': group,
+                    'manage': _can_manage(c, me_id, role),
+                    'last_text': str(last['fields'].get('Текст') or '')[:60] if last else '',
+                    'last_time': _local(last.get('createdTime')) if last else '',
+                    'sort': last.get('createdTime', '') if last else (c.get('createdTime') or '')})
     out.sort(key=lambda x: x['sort'], reverse=True)
     return out
 
 
 def _chat_access(chat_id, me_id, role):
+    chat = _chat(chat_id)
     msgs = chat_messages(chat_id)
-    parts = participants(msgs)
-    if me_id in parts or role == 'admin':
+    parts = chat_parts(chat, msgs)
+    if chat and (me_id in parts or role == 'admin'):
         return msgs, parts
     return None, None
 
@@ -428,8 +449,11 @@ def chat_send():
     others = [p for p in parts if p != me['id']]
     if not others:
         return err('Немає отримувача')
+    fields = {'Текст': text, 'Від': [me['id']], 'Чат': [cid]}
+    if not (_chat(cid)['fields'].get('Група')):
+        fields['До'] = [others[0]]          # у груповому чаті отримувачі — усі учасники
     try:
-        cache.create_record('messages', {'Текст': text, 'Від': [me['id']], 'До': [others[0]], 'Чат': [cid]})
+        cache.create_record('messages', fields)
     except Exception as e:
         return err(str(e), 500)
     return jsonify(ok=True)
@@ -439,21 +463,33 @@ def chat_send():
 @login_only
 def chat_create():
     me = me_record(str(session['user']).strip().lower())
-    to = request.form.get('to', '').strip()
+    role = session.get('role')
     text = request.form.get('text', '').strip()
     title = request.form.get('title', '').strip()
-    target = next((u for u in cache.get_users() if u['id'] == to), None)
-    if not me or not target or to == me['id']:
+    users = {u['id']: u for u in cache.get_users()}
+    tos = list(dict.fromkeys(t.strip() for t in request.form.getlist('to') if t.strip() and me and t.strip() != me['id']))
+    if not me or not tos or any(t not in users for t in tos):
         return err('Оберіть співрозмовника')
-    if session.get('role') == 'student' and str(cv(target['fields'].get('Role')) or '').lower() not in ('teacher', 'admin'):
+    group = len(tos) > 1
+    if group and role not in ('teacher', 'admin'):
+        return err('Групи можуть створювати лише вчителі й адмін', 403)
+    if role == 'student' and str(cv(users[tos[0]]['fields'].get('Role')) or '').lower() not in ('teacher', 'admin'):
         return err('Учень може писати лише вчителям і адміну', 403)
     if not text:
         return err('Введіть перше повідомлення')
+    if len(title) > 80:
+        return err('Назва задовга (до 80 символів)')
     names = user_names()
     chat = None
     try:
-        chat = cache.create_record('chats', {'Назва чату': title or f"{names.get(me['id'])} — {names.get(to)}"})
-        cache.create_record('messages', {'Текст': text, 'Від': [me['id']], 'До': [to], 'Чат': [chat['id']]})
+        if group:
+            dflt = 'Група: ' + ', '.join(names.get(t, '?') for t in tos)
+            chat = cache.create_record('chats', {'Назва чату': title or (dflt[:77] + '…' if len(dflt) > 80 else dflt),
+                                                 'Група': True, 'Автор': [me['id']], 'Учасники': [me['id']] + tos})
+            cache.create_record('messages', {'Текст': text, 'Від': [me['id']], 'Чат': [chat['id']]})
+        else:
+            chat = cache.create_record('chats', {'Назва чату': title or f"{names.get(me['id'])} — {names.get(tos[0])}"})
+            cache.create_record('messages', {'Текст': text, 'Від': [me['id']], 'До': [tos[0]], 'Чат': [chat['id']]})
     except Exception as e:
         if chat:
             try:
@@ -500,8 +536,9 @@ def msg_delete():
     try:
         cache.delete_record('messages', rec['id'])
         for cid in chats:                      # порожній чат прибираємо
-            if not chat_messages(cid):
-                cache.delete_record('chats', cid)
+            ch = _chat(cid)
+            if ch and not ch['fields'].get('Група') and not chat_messages(cid):
+                cache.delete_record('chats', cid)   # порожній звичайний чат прибираємо (груповий лишається)
     except Exception as ex:
         return err(str(ex), 500)
     return jsonify(ok=True)
@@ -514,7 +551,7 @@ def chat_rename():
     cid = request.form.get('chat_id', '')
     title = request.form.get('title', '').strip()
     msgs, parts = _chat_access(cid, me['id'] if me else '', session.get('role'))
-    if msgs is None:
+    if msgs is None or not _can_manage(_chat(cid), me['id'] if me else '', session.get('role')):
         return err('Доступ заборонено', 403)
     if not title:
         return err('Введіть назву')
@@ -531,7 +568,7 @@ def chat_delete():
     me = me_record(str(session['user']).strip().lower())
     cid = request.form.get('chat_id', '')
     msgs, parts = _chat_access(cid, me['id'] if me else '', session.get('role'))
-    if msgs is None:
+    if msgs is None or not _can_manage(_chat(cid), me['id'] if me else '', session.get('role')):
         return err('Доступ заборонено', 403)
     try:
         cache.batch_delete('messages', [m['id'] for m in msgs])
@@ -544,7 +581,8 @@ def chat_delete():
 # ---------- домашки ----------
 MAX_MB = int(os.environ.get('MAX_UPLOAD_MB', '10'))  # ліміт одного файлу (безкоштовний Supabase — максимум 50 МБ)
 MAX_ANSWER_FILES = int(os.environ.get('MAX_ANSWER_FILES', '5'))  # файлів-відповідей від одного учня на домашку
-STORAGE_LIMIT_MB = int(os.environ.get('STORAGE_LIMIT_MB', '1024'))  # квота Storage (free = 1 ГБ), для індикатора
+MAX_MEDIA_MB = int(os.environ.get('MAX_MEDIA_MB', '50'))  # ліміт одного фото/відео у вкладці «Файли»
+STORAGE_LIMIT_MB = int(os.environ.get('STORAGE_LIMIT_MB', '5120'))  # квота Storage (5 ГБ), для індикатора
 TMP_DIR = os.path.join(tempfile.gettempdir(), 'school_uploads')
 os.makedirs(TMP_DIR, exist_ok=True)
 F_TASK, F_ANS = 'Завдання файл', 'Відповідь файли'
@@ -578,7 +616,7 @@ def build_homework(role, st_rec, sname, email=''):
     return out
 
 
-def _save_files(key='files'):
+def _save_files(key='files', limit_mb=None):
     """Зберігає завантажені файли у тимчасову теку (без читання в пам'ять)."""
     out = []
     try:
@@ -590,8 +628,8 @@ def _save_files(key='files'):
             fl.save(path)
             size = os.path.getsize(path)
             out.append((name, path, fl.mimetype or 'application/octet-stream', size))
-            if size > MAX_MB * 1024 * 1024:
-                raise ValueError(f'Файл «{name}» більший за {MAX_MB} МБ')
+            if size > (limit_mb or MAX_MB) * 1024 * 1024:
+                raise ValueError(f'Файл «{name}» більший за {limit_mb or MAX_MB} МБ')
     except Exception:
         _cleanup(out)
         raise
@@ -718,6 +756,141 @@ def hw_file_delete():
     return jsonify(ok=True)
 
 
+# ---------- вкладка «Файли» (фото й відео) ----------
+def _media_kind(name, mime):
+    m = (mime or '').lower()
+    ext = os.path.splitext(name)[1].lower()
+    if m.startswith('image/') or ext in ('.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.bmp'):
+        return 'image'
+    if m.startswith('video/') or ext in ('.mp4', '.mov', '.webm', '.m4v', '.avi', '.mkv'):
+        return 'video'
+    return None
+
+
+def build_media(role, me_id):
+    groups = {str(g['id']): {'id': str(g['id']), 'name': g['name'], 'dates': {}} for g in cache.get_media_groups()}
+    for f in cache.get_media_files():
+        g = groups.get(str(f['group_id']))
+        if not g:
+            continue
+        d = str(f['taken_on'])
+        g['dates'].setdefault(d, []).append({
+            'id': str(f['id']), 'name': f['filename'], 'kind': f['kind'],
+            'can_del': role == 'admin' or (role == 'teacher' and str(f.get('uploaded_by') or '') == me_id),
+            '_t': f.get('created_at') or ''})
+    out = []
+    for g in groups.values():
+        dates = []
+        for d in sorted(g['dates'], reverse=True):           # нові дати — зверху
+            fl = sorted(g['dates'][d], key=lambda x: x['_t'])
+            for x in fl:
+                x.pop('_t')
+            dates.append({'date': d, 'label': '.'.join(reversed(d.split('-'))), 'files': fl})
+        g['dates'] = dates
+        g['latest'] = dates[0]['date'] if dates else ''
+        out.append(g)
+    out.sort(key=lambda g: (g['latest'], g['name'].lower()), reverse=True)
+    return out
+
+
+@bp.route('/media/file/<fid>')
+@login_only
+def media_get(fid):
+    row = cache.media_file(fid)
+    if not row:
+        return 'Не знайдено', 404
+    try:
+        path = cache.local_file({'path': row['path']}, bucket=cache.MEDIA_BUCKET)
+    except Exception:
+        path = None
+    if not path:
+        return 'Файл недоступний у сховищі', 404
+    resp = send_file(path, mimetype=row.get('mime') or 'application/octet-stream',
+                     download_name=row['filename'], conditional=True)   # conditional => підтримка Range (перемотка відео)
+    resp.headers['Cache-Control'] = 'private, max-age=3600'
+    return resp
+
+
+@bp.route('/media/group_create', methods=['POST'])
+@login_only
+@staff_only
+def media_group_create():
+    name = ' '.join(request.form.get('name', '').split())
+    if not name:
+        return err('Введіть назву групи')
+    if len(name) > 80:
+        return err('Назва групи задовга (до 80 символів)')
+    try:
+        g = cache.create_media_group(name)
+    except Exception as e:
+        return err(str(e), 500)
+    return jsonify(ok=True, id=str(g['id']), name=g['name'])
+
+
+@bp.route('/media/upload', methods=['POST'])
+@login_only
+@staff_only
+def media_upload():
+    gid, day = request.form.get('group_id', '').strip(), request.form.get('date', '').strip()
+    try:
+        datetime.strptime(day, '%Y-%m-%d')
+    except ValueError:
+        return err('Вкажіть дату')
+    if not gid:
+        return err('Оберіть групу')
+    try:
+        files = _save_files(limit_mb=MAX_MEDIA_MB)
+    except ValueError as e:
+        return err(str(e))
+    me = me_record(str(session['user']).strip().lower())
+    try:
+        if not files:
+            return err('Оберіть файли')
+        kinds = [_media_kind(n, c) for n, _, c, _ in files]
+        if None in kinds:
+            return err(f'«{files[kinds.index(None)][0]}» — не фото і не відео')
+        for (name, path, ctype, size), kind in zip(files, kinds):
+            with open(path, 'rb') as fh:
+                cache.add_media(gid, day, name, fh, ctype, kind, me['id'] if me else None)
+    except KeyError as e:
+        return err(str(e).strip("'\""))
+    except Exception as e:
+        return err(str(e), 500)
+    finally:
+        _cleanup(files)
+    return jsonify(ok=True)
+
+
+@bp.route('/media/delete', methods=['POST'])
+@login_only
+@staff_only
+def media_delete():
+    row = cache.media_file(request.form.get('id', ''))
+    if not row:
+        return err('Не знайдено', 404)
+    me = me_record(str(session['user']).strip().lower())
+    if session.get('role') != 'admin' and str(row.get('uploaded_by') or '') != (me['id'] if me else ''):
+        return err('Видаляти можна лише свої файли', 403)
+    try:
+        cache.delete_media(row['id'])
+    except Exception as e:
+        return err(str(e), 500)
+    return jsonify(ok=True)
+
+
+@bp.route('/media/group_delete', methods=['POST'])
+@login_only
+@staff_only
+def media_group_delete():
+    if session.get('role') != 'admin':
+        return err('Групу може видалити лише адмін', 403)
+    try:
+        cache.delete_media_group(request.form.get('id', ''))
+    except Exception as e:
+        return err(str(e), 500)
+    return jsonify(ok=True)
+
+
 def admin_only(fn):
     @wraps(fn)
     def w(*a, **k):
@@ -737,9 +910,65 @@ def build_file_manager():
         r['mb'] = round(r['size'] / 1048576, 2)
         r['date'] = (r['uploaded'] or '')[:10] or '—'
     rows.sort(key=lambda r: r['size'], reverse=True)
-    used = sum(r['size'] for r in rows) / 1048576
-    return {'files': rows, 'used_mb': round(used, 1), 'limit_mb': STORAGE_LIMIT_MB,
+    hw_mb = sum(r['size'] for r in rows) / 1048576
+    media_mb = cache.media_bytes() / 1048576
+    used = hw_mb + media_mb          # квота Storage спільна: домашки + фото/відео
+    return {'files': rows, 'used_mb': round(used, 1), 'hw_mb': round(hw_mb, 1), 'media_mb': round(media_mb, 1), 'limit_mb': STORAGE_LIMIT_MB,
             'pct': min(100, round(used / STORAGE_LIMIT_MB * 100)) if STORAGE_LIMIT_MB else 0}
+
+
+def build_media_manager():
+    gn = {str(g['id']): g['name'] for g in cache.get_media_groups()}
+    un = user_names()
+    rows = []
+    for f in cache.get_media_files():
+        d = str(f['taken_on'])
+        rows.append({'id': str(f['id']), 'name': f['filename'], 'group': gn.get(str(f['group_id']), '?'),
+                     'kind': f['kind'], 'mb': round(int(f.get('size') or 0) / 1048576, 2), 'size': int(f.get('size') or 0),
+                     'taken': '.'.join(reversed(d.split('-'))),
+                     'by': un.get(str(f.get('uploaded_by') or ''), '—'),
+                     'date': str(f.get('created_at') or '')[:10] or '—'})
+    rows.sort(key=lambda r: r['size'], reverse=True)
+    return {'files': rows}
+
+
+@bp.route('/media/files_delete', methods=['POST'])
+@login_only
+@admin_only
+def media_files_delete():
+    try:
+        n = cache.delete_media_many(request.form.getlist('ids'))
+    except Exception as e:
+        return err(str(e), 500)
+    return jsonify(ok=True, deleted=n)
+
+
+@bp.route('/media/files_old', methods=['POST'])
+@login_only
+@admin_only
+def media_files_old():
+    try:
+        days = max(1, int(request.form.get('days', '0')))
+    except ValueError:
+        return err('Вкажіть кількість днів')
+    cut = (datetime.utcnow() - timedelta(days=days)).strftime('%Y-%m-%dT%H:%M:%S')
+    ids = [str(f['id']) for f in cache.get_media_files() if cache._ts(f.get('created_at')) and cache._ts(f.get('created_at')) < cut]
+    try:
+        n = cache.delete_media_many(ids)
+    except Exception as e:
+        return err(str(e), 500)
+    return jsonify(ok=True, deleted=n)
+
+
+@bp.route('/media/orphans', methods=['POST'])
+@login_only
+@admin_only
+def media_orphans():
+    try:
+        cache.clean_orphans(cache.MEDIA_BUCKET)
+    except Exception as e:
+        return err(str(e), 500)
+    return jsonify(ok=True)
 
 
 @bp.route('/homework/files_delete', methods=['POST'])
@@ -851,10 +1080,14 @@ def portal_context(role, email):
         'chat_list': build_chats(role, me_id),
         'chat_users': [
             {'id': u['id'], 'name': str(cv(u['fields'].get('Full Name')) or cv(u['fields'].get('Email')) or ''),
-             'label': ROLE_LABEL.get(str(cv(u['fields'].get('Role')) or '').lower(), '')}
+             'label': ROLE_LABEL.get(str(cv(u['fields'].get('Role')) or '').lower(), ''),
+             'role': str(cv(u['fields'].get('Role')) or '').lower()}
             for u in cache.get_users()
             if u['id'] != me_id and (staff or str(cv(u['fields'].get('Role')) or '').lower() in ('teacher', 'admin'))],
         'homework_list': build_homework(role, st_rec, student_name(email, st_rec), email),
         'max_upload_mb': MAX_MB,
+        'max_media_mb': MAX_MEDIA_MB,
+        'media_groups': build_media(role, me_id),
         'file_mgr': build_file_manager() if role == 'admin' else None,
+        'media_mgr': build_media_manager() if role == 'admin' else None,
     }

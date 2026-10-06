@@ -30,6 +30,8 @@
   <button type="button" class="ptab-btn" data-tab="chats">Чати</button>
   <button type="button" class="ptab-btn" data-tab="announcements">Оголошення</button>
   <button type="button" class="ptab-btn" data-tab="homework">Домашки</button>
+  <button type="button" class="ptab-btn" data-tab="media">Файли</button>
+  {% if portal_role == 'admin' %}<button type="button" class="ptab-btn" data-tab="manage">Керування</button>{% endif %}
 </div>
 <script>
 function portalPost(url,data){

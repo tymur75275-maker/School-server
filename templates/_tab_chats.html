@@ -17,16 +17,16 @@
   <div class="chat-wrap">
     <div class="chat-list">
       {% for c in chat_list %}
-      <div class="chat-item" id="chatItem_{{ c.id }}" data-id="{{ c.id }}" data-title="{{ c.title }}" data-with="{{ c.with }}" data-member="{{ '1' if c.member else '' }}" onclick="chatOpen(this.dataset)">
-        <div><b>{{ c.title or c.with }}</b></div>
-        <div style="font-size:12px;color:#666">{{ 'Співрозмовник' if c.member else 'Учасники' }}: {{ c.with }}</div>
+      <div class="chat-item" id="chatItem_{{ c.id }}" data-id="{{ c.id }}" data-title="{{ c.title }}" data-with="{{ c.with }}" data-member="{{ '1' if c.member else '' }}" data-manage="{{ '1' if c.manage else '' }}" onclick="chatOpen(this.dataset)">
+        <div><b>{% if c.group %}👥 {% endif %}{{ c.title or c.with }}</b></div>
+        <div style="font-size:12px;color:#666">{{ 'Співрозмовник' if (c.member and not c.group) else 'Учасники' }}: {{ c.with }}</div>
         <div style="font-size:12px;color:#888;margin-top:4px">{{ c.last_text }}{% if c.last_text|length >= 60 %}…{% endif %} · {{ c.last_time }}</div>
       </div>
       {% else %}<p style="color:#666">Чатів немає.</p>{% endfor %}
     </div>
     <div class="chat-panel" id="chatPanel">
       <div class="chat-head" style="display:flex;justify-content:space-between;gap:8px;align-items:center"><span id="chatHead"></span>
-        <span style="white-space:nowrap"><button type="button" class="pbtn pbtn-gray" style="padding:4px 8px" onclick="chatRename()">✎ Назва</button>
+        <span id="chatManage" style="white-space:nowrap"><button type="button" class="pbtn pbtn-gray" style="padding:4px 8px" onclick="chatRename()">✎ Назва</button>
         <button type="button" class="pbtn pbtn-red" style="padding:4px 8px" onclick="chatDelete()">Видалити чат</button></span></div>
       <div class="chat-msgs" id="chatMsgs"></div>
       <div class="chat-send" id="chatSend">
@@ -37,8 +37,18 @@
   </div>
   <div class="pm-overlay" id="chatNewModal"><div class="pm-box">
     <h4>Новий чат</h4>
+    {% if portal_role != 'student' %}
+    <label>Кому (Ctrl/Shift — кілька; 2 і більше = груповий чат)</label>
+    <div style="display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap">
+      <button type="button" class="pbtn pbtn-gray" onclick="chatPick('child')">Усі учні</button>
+      <button type="button" class="pbtn pbtn-gray" onclick="chatPick('teacher')">Усі вчителі</button>
+      <button type="button" class="pbtn pbtn-gray" onclick="chatPick('')">Очистити</button>
+    </div>
+    <select id="chatTo" multiple size="8">{% for u in chat_users %}<option value="{{ u.id }}" data-role="{{ u.role }}">{{ u.name }} ({{ u.label }})</option>{% endfor %}</select>
+    {% else %}
     <label>Кому</label>
     <select id="chatTo">{% for u in chat_users %}<option value="{{ u.id }}">{{ u.name }} ({{ u.label }})</option>{% endfor %}</select>
+    {% endif %}
     <label>Назва чату (необов'язково)</label>
     <input type="text" id="chatTitle" style="width:100%;box-sizing:border-box;padding:8px;border:1px solid #ccc;border-radius:4px">
     <label>Перше повідомлення</label><textarea id="chatFirst" rows="3"></textarea>
@@ -56,6 +66,7 @@
       document.querySelectorAll('.chat-item').forEach(e=>e.classList.toggle('active',e.dataset.id===cur));
       $('chatHead').textContent=(d.title||d.with)+' — '+d.with;
       $('chatSend').style.display=d.member?'flex':'none';
+      $('chatManage').style.display=d.manage?'':'none';
       $('chatPanel').style.display='flex';
       load(true); clearInterval(timer); timer=setInterval(()=>{
         if(document.getElementById('tab-chats').classList.contains('active')) load(false)},4000);
@@ -109,7 +120,12 @@
         portalAct('/chats/delete',portalFD({chat_id:cur}));
     };
     window.chatCreate=function(){
-      portalAct('/chats/create',portalFD({to:$('chatTo').value,title:$('chatTitle').value,text:$('chatFirst').value}));
+      const fd=portalFD({title:$('chatTitle').value,text:$('chatFirst').value});
+      [...$('chatTo').selectedOptions].forEach(o=>fd.append('to',o.value));
+      portalAct('/chats/create',fd);
+    };
+    window.chatPick=function(role){
+      [...$('chatTo').options].forEach(o=>o.selected=!!role&&o.dataset.role===role);
     };
   })();
   </script>

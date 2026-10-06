@@ -1,0 +1,114 @@
+<div class="ptab-pane" id="tab-media">
+  <style>
+  .md-group{margin-top:14px;background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:8px 12px}
+  .md-group>summary{cursor:pointer;font-weight:bold;font-size:16px;padding:4px 0}
+  .md-date{margin:10px 0 4px;font-size:13px;font-weight:bold;color:#555;border-bottom:1px solid #eee;padding-bottom:2px}
+  .md-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}
+  .md-item{position:relative;aspect-ratio:1/1;background:#000;border-radius:6px;overflow:hidden;cursor:pointer}
+  .md-item img,.md-item video{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+  .md-badge{position:absolute;left:6px;bottom:6px;background:rgba(0,0,0,.65);color:#fff;font-size:11px;padding:1px 6px;border-radius:8px}
+  .md-del{position:absolute;right:4px;top:4px;background:rgba(220,53,69,.9);color:#fff;border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;line-height:20px;padding:0}
+  .md-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+  .md-chip{border:1px solid #ccc;background:#f8f9fa;border-radius:16px;padding:5px 12px;cursor:pointer;font-size:14px}
+  .md-chip.sel{background:#007bff;border-color:#007bff;color:#fff}
+  .md-chip.new{border-style:dashed;color:#28a745;border-color:#28a745;background:#fff;font-weight:bold}
+  #mdView{display:none;position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:2500;justify-content:center;align-items:center}
+  #mdView img,#mdView video{max-width:94vw;max-height:90vh;display:block}
+  #mdViewClose{position:absolute;right:16px;top:10px;color:#fff;font-size:34px;cursor:pointer;line-height:1}
+  </style>
+  {% if portal_role != 'student' %}<button type="button" class="pbtn pbtn-green" onclick="mdOpen()">Завантажити</button>{% endif %}
+  {% for g in media_groups %}
+  <details class="md-group" open>
+    <summary>{{ g.name }} <span style="font-weight:normal;color:#888;font-size:13px">({{ g.dates|map(attribute='files')|map('length')|sum }})</span>
+      {% if portal_role == 'admin' %}<a href="#" title="Видалити групу з усіма файлами" style="color:#dc3545;text-decoration:none;margin-left:8px"
+        data-id="{{ g.id }}" data-name="{{ g.name }}" onclick="mdGroupDel(this,event)">✕</a>{% endif %}</summary>
+    {% for d in g.dates %}
+    <div class="md-date">{{ d.label }}</div>
+    <div class="md-grid">
+      {% for f in d.files %}
+      <div class="md-item" data-id="{{ f.id }}" data-kind="{{ f.kind }}" onclick="mdView(this)" title="{{ f.name }}">
+        {% if f.kind == 'image' %}<img src="/media/file/{{ f.id }}" loading="lazy" alt="{{ f.name }}">
+        {% else %}<video src="/media/file/{{ f.id }}#t=0.1" preload="metadata" muted></video><span class="md-badge">▶ відео</span>{% endif %}
+        {% if f.can_del %}<button type="button" class="md-del" title="Видалити" onclick="event.stopPropagation();if(confirm('Видалити файл?'))portalAct('/media/delete',portalFD({id:'{{ f.id }}'}))">✕</button>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+    {% if not g.dates %}<p style="color:#888;font-size:13px">У групі поки немає файлів.</p>{% endif %}
+  </details>
+  {% else %}<p style="color:#666;margin-top:14px">Файлів поки немає.</p>{% endfor %}
+
+  <div id="mdView" onclick="mdViewClose()"><span id="mdViewClose">&times;</span><div id="mdViewBox" onclick="event.stopPropagation()"></div></div>
+  <script>
+  function mdView(el){
+    const box=document.getElementById('mdViewBox'),u='/media/file/'+el.dataset.id;
+    box.innerHTML='';
+    const m=document.createElement(el.dataset.kind==='video'?'video':'img');
+    m.src=u; if(m.tagName==='VIDEO'){m.controls=true;m.autoplay=true}
+    box.appendChild(m); document.getElementById('mdView').style.display='flex';
+  }
+  function mdGroupDel(a,e){e.preventDefault();if(confirm('Видалити групу «'+a.dataset.name+'» разом з усіма файлами?'))portalAct('/media/group_delete',portalFD({id:a.dataset.id}))}
+  function mdViewClose(){const v=document.getElementById('mdView');v.style.display='none';document.getElementById('mdViewBox').innerHTML=''}
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')mdViewClose()});
+  </script>
+
+  {% if portal_role != 'student' %}
+  <div class="pm-overlay" id="mdModal"><div class="pm-box">
+    <h4>Завантажити фото / відео</h4>
+    <label>Група</label>
+    <div class="md-chips" id="mdChips">
+      <span class="md-chip new" onclick="mdNewGroup()">+ Створити</span>
+      {% for g in media_groups %}<span class="md-chip" data-id="{{ g.id }}" onclick="mdPick(this)">{{ g.name }}</span>{% endfor %}
+    </div>
+    <label>Дата</label>
+    <input type="date" id="mdDate" style="width:100%;box-sizing:border-box;padding:8px;border:1px solid #ccc;border-radius:4px">
+    <label>Файли (до {{ max_media_mb }} МБ кожен)</label>
+    <input type="file" id="mdFiles" multiple accept="image/*,video/*">
+    <div class="pm-actions">
+      <button type="button" class="pbtn pbtn-gray" onclick="document.getElementById('mdModal').style.display='none'">Скасувати</button>
+      <button type="button" class="pbtn pbtn-green" id="mdSend" onclick="mdUpload()">Завантажити</button>
+    </div>
+  </div></div>
+  <script>
+  let mdGroup='';
+  function mdOpen(){
+    const d=new Date(),p=n=>String(n).padStart(2,'0');
+    document.getElementById('mdDate').value=d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
+    document.getElementById('mdFiles').value='';
+    document.getElementById('mdModal').style.display='flex';
+  }
+  function mdPick(el){
+    mdGroup=el.dataset.id;
+    document.querySelectorAll('#mdChips .md-chip').forEach(c=>c.classList.toggle('sel',c===el));
+  }
+  function mdNewGroup(){
+    const n=prompt('Назва нової групи');
+    if(n===null||!n.trim())return;
+    portalPostJson('/media/group_create',portalFD({name:n})).then(j=>{
+      if(!j)return;
+      let el=[...document.querySelectorAll('#mdChips .md-chip[data-id]')].find(c=>c.dataset.id===j.id);
+      if(!el){
+        el=document.createElement('span');el.className='md-chip';el.dataset.id=j.id;el.textContent=j.name;
+        el.onclick=()=>mdPick(el);document.getElementById('mdChips').appendChild(el);
+      }
+      mdPick(el);
+    });
+  }
+  function portalPostJson(url,data){
+    return fetch(url,{method:'POST',body:data}).then(r=>r.json().catch(()=>({})).then(j=>({r,j}))).then(({r,j})=>{
+      if(!r.ok||!j.ok){alert(j.error||'Помилка');return null} return j;
+    }).catch(()=>{alert('Помилка мережі');return null});
+  }
+  function mdUpload(){
+    const fl=document.getElementById('mdFiles').files,dt=document.getElementById('mdDate').value;
+    if(!mdGroup){alert('Оберіть групу або створіть нову');return}
+    if(!dt){alert('Вкажіть дату');return}
+    if(!fl.length){alert('Оберіть файли');return}
+    const fd=new FormData();fd.append('group_id',mdGroup);fd.append('date',dt);
+    [...fl].forEach(f=>fd.append('files',f));
+    const b=document.getElementById('mdSend');b.disabled=true;b.textContent='Завантаження…';
+    portalPostJson('/media/upload',fd).then(j=>{if(j)location.reload();else{b.disabled=false;b.textContent='Завантажити'}});
+  }
+  </script>
+  {% endif %}
+</div>

@@ -1,0 +1,82 @@
+{% if portal_role == 'admin' and file_mgr %}
+<div class="ptab-pane" id="tab-manage">
+  <h3 style="margin:0 0 8px">Керування файлами</h3>
+  <div style="font-size:13px;color:#555">Зайнято у сховищі: <b>{{ file_mgr.used_mb }} МБ</b> з {{ file_mgr.limit_mb }} МБ
+    (домашки: {{ file_mgr.hw_mb }} МБ, фото й відео: {{ file_mgr.media_mb }} МБ)</div>
+  <div style="height:10px;background:#e9ecef;border-radius:5px;overflow:hidden;margin:6px 0 4px"><div style="height:100%;width:{{ file_mgr.pct }}%;background:{{ '#dc3545' if file_mgr.pct >= 80 else '#28a745' }}"></div></div>
+  <div style="margin-top:22px;padding-top:14px;border-top:2px solid #ddd">
+    <h3 style="margin:0 0 8px">Файли домашок <span style="font-weight:normal;font-size:13px;color:#555">· {{ file_mgr.files|length }} шт. · {{ file_mgr.hw_mb }} МБ</span></h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+      <button type="button" class="pbtn pbtn-red" onclick="fmDelSel()">Видалити вибрані</button>
+      <span style="margin-left:10px">Файли старші за</span>
+      <input type="number" id="fmDays" min="1" value="90" style="width:70px;padding:6px">
+      <span>днів</span>
+      <button type="button" class="pbtn pbtn-red" onclick="fmOld()">Видалити</button>
+      <button type="button" class="pbtn pbtn-gray" onclick="if(confirm('Видалити зі сховища файли без запису в базі?'))portalAct('/homework/orphans',portalFD({}))">Очистити сміття у сховищі</button>
+    </div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:14px;background:#fff">
+      <tr style="background:#f8f9fa"><th style="padding:6px;border:1px solid #ddd;width:30px"><input type="checkbox" onclick="document.querySelectorAll('.fmChk').forEach(c=>c.checked=this.checked)"></th>
+        <th style="padding:6px;border:1px solid #ddd;text-align:left">Файл</th><th style="padding:6px;border:1px solid #ddd">Домашка</th>
+        <th style="padding:6px;border:1px solid #ddd">Тип</th><th style="padding:6px;border:1px solid #ddd">МБ</th><th style="padding:6px;border:1px solid #ddd">Дата</th></tr>
+      {% for f in file_mgr.files %}
+      <tr><td style="padding:6px;border:1px solid #ddd;text-align:center"><input type="checkbox" class="fmChk" value="{{ f.key }}"></td>
+        <td style="padding:6px;border:1px solid #ddd;word-break:break-word">{% if f.stored %}<a href="/homework/file/{{ f.hw }}/{{ f.kind }}/{{ f.id }}" target="_blank">{{ f.name }}</a>{% else %}<span style="color:#999" title="Файла немає у сховищі">{{ f.name }}</span>{% endif %}</td>
+        <td style="padding:6px;border:1px solid #ddd;text-align:center">№{{ f.num }}</td>
+        <td style="padding:6px;border:1px solid #ddd;text-align:center">{{ 'завдання' if f.kind == 'task' else 'відповідь' }}</td>
+        <td style="padding:6px;border:1px solid #ddd;text-align:right">{{ f.mb }}</td>
+        <td style="padding:6px;border:1px solid #ddd;text-align:center">{{ f.date }}</td></tr>
+      {% else %}<tr><td colspan="6" style="padding:10px;color:#666">Файлів немає.</td></tr>{% endfor %}
+    </table></div>
+  </div>
+  <script>
+  function fmDelSel(){
+    const v=[...document.querySelectorAll('.fmChk:checked')].map(c=>c.value);
+    if(!v.length){alert('Оберіть файли');return}
+    if(!confirm('Видалити файлів: '+v.length+'? Це незворотно.'))return;
+    const fd=new FormData();v.forEach(x=>fd.append('items',x));portalAct('/homework/files_delete',fd);
+  }
+  function fmOld(){
+    const d=document.getElementById('fmDays').value;
+    if(confirm('Видалити всі файли, завантажені понад '+d+' дн. тому? Це незворотно.'))portalAct('/homework/files_old',portalFD({days:d}));
+  }
+  </script>
+  <div style="margin-top:28px;padding-top:14px;border-top:2px solid #ddd">
+    <h3 style="margin:0 0 8px">Фото та відео <span style="font-weight:normal;font-size:13px;color:#555">· {{ media_mgr.files|length }} шт. · {{ file_mgr.media_mb }} МБ</span></h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+      <button type="button" class="pbtn pbtn-red" onclick="mmDelSel()">Видалити вибрані</button>
+      <span style="margin-left:10px">Файли старші за</span>
+      <input type="number" id="mmDays" min="1" value="90" style="width:70px;padding:6px">
+      <span>днів</span>
+      <button type="button" class="pbtn pbtn-red" onclick="mmOld()">Видалити</button>
+      <button type="button" class="pbtn pbtn-gray" onclick="if(confirm('Видалити зі сховища файли без запису в базі?'))portalAct('/media/orphans',portalFD({}))">Очистити сміття у сховищі</button>
+    </div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:14px;background:#fff">
+      <tr style="background:#f8f9fa"><th style="padding:6px;border:1px solid #ddd;width:30px"><input type="checkbox" onclick="document.querySelectorAll('.mmChk').forEach(c=>c.checked=this.checked)"></th>
+        <th style="padding:6px;border:1px solid #ddd;text-align:left">Файл</th><th style="padding:6px;border:1px solid #ddd">Група</th><th style="padding:6px;border:1px solid #ddd">Дата</th>
+        <th style="padding:6px;border:1px solid #ddd">Тип</th><th style="padding:6px;border:1px solid #ddd">МБ</th><th style="padding:6px;border:1px solid #ddd">Завантажив</th><th style="padding:6px;border:1px solid #ddd">Завантажено</th></tr>
+      {% for f in media_mgr.files %}
+      <tr><td style="padding:6px;border:1px solid #ddd;text-align:center"><input type="checkbox" class="mmChk" value="{{ f.id }}"></td>
+        <td style="padding:6px;border:1px solid #ddd;word-break:break-word"><a href="/media/file/{{ f.id }}" target="_blank">{{ f.name }}</a></td>
+        <td style="padding:6px;border:1px solid #ddd;text-align:center">{{ f.group }}</td>
+        <td style="padding:6px;border:1px solid #ddd;text-align:center">{{ f.taken }}</td>
+        <td style="padding:6px;border:1px solid #ddd;text-align:center">{{ 'фото' if f.kind == 'image' else 'відео' }}</td>
+        <td style="padding:6px;border:1px solid #ddd;text-align:right">{{ f.mb }}</td>
+        <td style="padding:6px;border:1px solid #ddd;text-align:center">{{ f.by }}</td>
+        <td style="padding:6px;border:1px solid #ddd;text-align:center">{{ f.date }}</td></tr>
+      {% else %}<tr><td colspan="8" style="padding:10px;color:#666">Файлів немає.</td></tr>{% endfor %}
+    </table></div>
+  </div>
+  <script>
+  function mmDelSel(){
+    const v=[...document.querySelectorAll('.mmChk:checked')].map(c=>c.value);
+    if(!v.length){alert('Оберіть файли');return}
+    if(!confirm('Видалити файлів: '+v.length+'? Це незворотно.'))return;
+    const fd=new FormData();v.forEach(x=>fd.append('ids',x));portalAct('/media/files_delete',fd);
+  }
+  function mmOld(){
+    const d=document.getElementById('mmDays').value;
+    if(confirm('Видалити всі фото й відео, завантажені понад '+d+' дн. тому? Це незворотно.'))portalAct('/media/files_old',portalFD({days:d}));
+  }
+  </script>
+</div>
+{% endif %}

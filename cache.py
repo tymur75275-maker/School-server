@@ -32,8 +32,10 @@ BUCKET = "homework"          # приватний Storage-бакет для фа
 
 _client = None
 _last_sync = None
+MEDIA_BUCKET = "media"                     # окремий бакет для вкладки «Файли» (фото/відео)
+_media = {"groups": {}, "files": {}}      # id -> рядок таблиць media_groups / media_files
 _raw = {k: {} for k in _KEYS}     # key -> {id (рядок): рядок таблиці Supabase}
-_links = {"ann_to": {}, "ann_read": {}, "hw_students": {}, "subj_teachers": {}}   # parent id -> [child id]
+_links = {"ann_to": {}, "ann_read": {}, "hw_students": {}, "subj_teachers": {}, "chat_members": {}}   # parent id -> [child id]
 _cache = {k: [] for k in _KEYS}   # key -> список записів у форматі Airtable
 
 # ключ кешу -> таблиця в Supabase
@@ -55,7 +57,7 @@ _SIMPLE = {
     "discipline": {"Причина": "reason", "Статус": "status"},
     "announcements": {"Текст": "body", "Обов'язкове": "mandatory", "Термін дії до": "expires_at"},
     "messages": {"Текст": "body"},
-    "chats": {"Назва чату": "name"},
+    "chats": {"Назва чату": "name", "Група": "is_group"},
     "homework": {"Завдання": "task"},
 }
 # зв'язки "один запис": поле Airtable (список з одним id) -> колонка-FK
@@ -65,6 +67,7 @@ _LINK1 = {
     "discipline": {"Учень": "student_id", "Вчитель": "teacher_id"},
     "announcements": {"Від": "from_user_id"},
     "messages": {"Від": "from_user_id", "До": "to_user_id", "Чат": "chat_id"},
+    "chats": {"Автор": "created_by"},
 }
 # зв'язки "багато": поле -> (таблиця-зв'язок, колонка батька, колонка дитини, ключ у _links)
 _JUNC = {
@@ -75,6 +78,9 @@ _JUNC = {
     "subjects": {
         "Викладач": ("subject_teachers", "subject_id", "teacher_id", "subj_teachers"),
     },
+    "chats": {
+        "Учасники": ("chat_members", "chat_id", "user_id", "chat_members"),
+    },
     "homework": {
         "Учні": ("homework_students", "homework_id", "student_id", "hw_students"),
     },
@@ -83,7 +89,7 @@ _JUNC = {
 _FILE_COLS = {"Завдання файл": "task_files", "Відповідь файли": "answer_files"}
 # після видалення запису ці таблиці могли змінитись у БД (CASCADE / SET NULL) — перечитуємо
 _DEPS = {
-    "users": ["students", "discipline", "messages", "announcements"],
+    "users": ["students", "discipline", "messages", "announcements", "chats"],
     "students": ["grades", "discipline", "homework"],
     "subjects": ["grades"],
     "chats": ["messages"],
@@ -180,6 +186,7 @@ def refresh_cache():
     with _lock:
         for key in _KEYS:
             _load(key)
+        _load_media()
         _rebuild()
         _last_sync = datetime.utcnow()
     return _last_sync
@@ -301,6 +308,10 @@ def _rebuild():
     for cid, c in _raw["chats"].items():
         f = {}
         _put(f, "Назва чату", c.get("name"))
+        if c.get("is_group"):
+            f["Група"] = True
+        _put(f, "Автор", [_s(c.get("created_by"))] if c.get("created_by") else None)
+        _put(f, "Учасники", list(_links["chat_members"].get(cid, [])))
         chats.append(rec(cid, c, f))
 
     homework = []
@@ -664,14 +675,14 @@ def delete_files(items):
     return n
 
 
-def _list_paths(prefix=""):
+def _list_paths(prefix="", bucket=None):
     out, off = [], 0
     while True:
-        items = _client.storage.from_(BUCKET).list(prefix, {"limit": 1000, "offset": off}) or []
+        items = _client.storage.from_(bucket or BUCKET).list(prefix, {"limit": 1000, "offset": off}) or []
         for it in items:
             p = f"{prefix}/{it['name']}" if prefix else it["name"]
             if it.get("id") is None:
-                out += _list_paths(p)
+                out += _list_paths(p, bucket)
             else:
                 out.append((p, int((it.get("metadata") or {}).get("size") or 0), _ts(it.get("created_at"))))
         if len(items) < 1000:
@@ -679,15 +690,20 @@ def _list_paths(prefix=""):
         off += 1000
 
 
-def clean_orphans():
-    """Видаляє зі Storage файли, на які немає посилань у БД (молодші за 10 хв не чіпає)."""
+def clean_orphans(bucket=None):
+    """Видаляє зі Storage файли, на які немає посилань у БД (молодші за 10 хв не чіпає).
+    bucket=None — домашки, bucket=MEDIA_BUCKET — вкладка «Файли»."""
+    b = bucket or BUCKET
     with _lock:
-        used = {a["path"] for h in _raw["homework"].values() for col in _FILE_COLS.values()
-                for a in _norm_atts(h.get(col)) if a.get("path")}
+        if b == MEDIA_BUCKET:
+            used = {f["path"] for f in _media["files"].values()}
+        else:
+            used = {a["path"] for h in _raw["homework"].values() for col in _FILE_COLS.values()
+                    for a in _norm_atts(h.get(col)) if a.get("path")}
         limit = _ts(datetime.now(timezone.utc) - timedelta(minutes=10))
-        orph = [(p, sz) for p, sz, cr in _list_paths() if p not in used and (cr or "") < limit]
+        orph = [(p, sz) for p, sz, cr in _list_paths("", b) if p not in used and (cr or "") < limit]
         for i in range(0, len(orph), 100):
-            _client.storage.from_(BUCKET).remove([p for p, _ in orph[i:i + 100]])
+            _client.storage.from_(b).remove([p for p, _ in orph[i:i + 100]])
         return len(orph), sum(sz for _, sz in orph)
 
 
@@ -725,7 +741,7 @@ def _evict():
             pass
 
 
-def local_file(att):
+def local_file(att, bucket=None):
     """Шлях до локальної копії вкладення (скачує зі Storage, якщо її ще немає)."""
     sp = att.get("path")
     if not sp:
@@ -734,10 +750,119 @@ def local_file(att):
     if os.path.exists(p):
         os.utime(p)
         return p
-    data = _client.storage.from_(BUCKET).download(sp)
+    data = _client.storage.from_(bucket or BUCKET).download(sp)
     tmp = p + "." + secrets.token_hex(4) + ".part"
     with open(tmp, "wb") as fh:
         fh.write(data)
     os.replace(tmp, p)
     _evict()
     return p
+
+
+# ---------------------------------------------------------------
+# Вкладка «Файли»: групи, фото та відео (бакет "media")
+# ---------------------------------------------------------------
+
+def _load_media():
+    _media["groups"] = {str(r["id"]): r for r in _fetch("media_groups", ("created_at", "id"))}
+    _media["files"] = {str(r["id"]): r for r in _fetch("media_files", ("created_at", "id"))}
+
+
+def get_media_groups():
+    return list(_media["groups"].values())
+
+
+def get_media_files():
+    return list(_media["files"].values())
+
+
+def media_bytes():
+    return sum(int(f.get("size") or 0) for f in _media["files"].values())
+
+
+def create_media_group(name):
+    """Нова група; якщо така назва вже є (без урахування регістру) — повертає наявну."""
+    name = " ".join((name or "").split())
+    with _lock:
+        for g in _media["groups"].values():
+            if g["name"].lower() == name.lower():
+                return g
+        row = _client.table("media_groups").insert({"name": name}).execute().data[0]
+        _media["groups"][str(row["id"])] = row
+        return row
+
+
+def add_media(group_id, taken_on, filename, content, content_type, kind, user_id=None):
+    """Кладе файл у Storage і додає запис. content — відкритий файл (rb) або bytes."""
+    group_id = str(group_id)
+    if group_id not in _media["groups"]:
+        raise KeyError("Групу не знайдено")
+    if hasattr(content, "seek"):
+        content.seek(0, 2)
+        size = content.tell()
+        content.seek(0)
+    else:
+        size = len(content)
+    path = f"{group_id}/{secrets.token_hex(12)}"          # ASCII-ключ; справжня назва — в БД
+    _client.storage.from_(MEDIA_BUCKET).upload(
+        path, content, {"content-type": content_type or "application/octet-stream",
+                        "cache-control": "3600"})
+    try:
+        with _lock:
+            row = _client.table("media_files").insert({
+                "group_id": group_id, "taken_on": taken_on, "filename": filename, "path": path,
+                "kind": kind, "mime": content_type, "size": size,
+                "uploaded_by": user_id or None}).execute().data[0]
+            _media["files"][str(row["id"])] = row
+            return row
+    except Exception:
+        _rm_media([path])
+        raise
+
+
+def _rm_media(paths):
+    for p in paths:
+        try:
+            os.remove(_fpath(p))
+        except OSError:
+            pass
+    try:
+        if paths:
+            _client.storage.from_(MEDIA_BUCKET).remove(list(paths))
+    except Exception:
+        pass
+
+
+def delete_media(file_id):
+    with _lock:
+        row = _media["files"].get(str(file_id))
+        if not row:
+            return
+        _client.table("media_files").delete().eq("id", row["id"]).execute()
+        _media["files"].pop(str(file_id), None)
+        _rm_media([row["path"]])
+
+
+def delete_media_group(group_id):
+    """Видаляє групу разом з усіма її файлами (у БД — каскадом)."""
+    gid = str(group_id)
+    with _lock:
+        paths = [f["path"] for f in _media["files"].values() if str(f["group_id"]) == gid]
+        _client.table("media_groups").delete().eq("id", gid).execute()
+        _media["groups"].pop(gid, None)
+        _media["files"] = {k: v for k, v in _media["files"].items() if str(v["group_id"]) != gid}
+        _rm_media(paths)
+
+
+def media_file(file_id):
+    return _media["files"].get(str(file_id))
+
+
+def delete_media_many(ids):
+    n = 0
+    with _lock:
+        for i in ids:
+            if str(i) in _media["files"]:
+                delete_media(i)
+                n += 1
+    return n
