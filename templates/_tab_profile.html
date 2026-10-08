@@ -1,0 +1,46 @@
+<div class="ptab-pane" id="tab-profile">
+  <h3 style="margin:0 0 10px">Фон кабінету</h3>
+  <div style="background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:14px;max-width:560px">
+    <div style="font-size:13px;color:#555;margin-bottom:10px">
+      Зараз:
+      {% if profile_bg.has_file %}<b>власне зображення</b> «{{ profile_bg.filename }}» ({{ profile_bg.mb }} МБ{% if profile_bg.date %}, завантажено {{ profile_bg.date }}{% endif %})
+      {% elif profile_bg.color %}<b>колір</b> <span style="display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:middle;border:1px solid #999;background:{{ profile_bg.color }}"></span> {{ profile_bg.color }}
+      {% else %}<b>стандартний</b>{% endif %}
+    </div>
+
+    <label style="display:block;font-weight:bold;margin:8px 0 4px">Колір</label>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input type="color" id="pfColor" value="{{ profile_bg.color or '#f4f6f9' }}" style="width:48px;height:36px;padding:0;border:1px solid #ccc;border-radius:4px">
+      <input type="text" id="pfHex" value="{{ profile_bg.color or '#f4f6f9' }}" maxlength="7" placeholder="#RRGGBB" style="width:100px;padding:8px;border:1px solid #ccc;border-radius:4px">
+      <button type="button" class="pbtn pbtn-green" onclick="pfSaveColor()">Зберегти колір</button>
+    </div>
+
+    <label style="display:block;font-weight:bold;margin:16px 0 4px">Власне зображення (до {{ max_bg_mb }} МБ)</label>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input type="file" id="pfFile" accept="image/jpeg,image/png,image/gif,image/webp,image/bmp" style="max-width:100%">
+      <button type="button" class="pbtn pbtn-green" id="pfUp" onclick="pfUpload()">Завантажити</button>
+    </div>
+    <div style="font-size:12px;color:#888;margin-top:4px">JPG, PNG, GIF, WEBP або BMP. Новий колір чи файл замінює попередній.</div>
+
+    <div style="margin-top:16px"><button type="button" class="pbtn pbtn-gray" onclick="if(confirm('Повернути стандартний фон?'))portalAct('/profile/reset',portalFD({}))">Скинути до стандартного</button></div>
+  </div>
+  <script>
+  (function(){
+    const c=document.getElementById('pfColor'),h=document.getElementById('pfHex');
+    c.addEventListener('input',()=>h.value=c.value);
+    h.addEventListener('input',()=>{if(/^#[0-9a-fA-F]{6}$/.test(h.value))c.value=h.value});
+  })();
+  function pfSaveColor(){
+    const v=document.getElementById('pfHex').value.trim();
+    if(!/^#[0-9a-fA-F]{6}$/.test(v)){alert('Вкажіть колір у форматі #RRGGBB');return}
+    portalAct('/profile/color',portalFD({color:v}));
+  }
+  function pfUpload(){
+    const f=document.getElementById('pfFile').files;
+    if(!f.length){alert('Оберіть зображення');return}
+    const fd=new FormData();fd.append('bg',f[0]);
+    const b=document.getElementById('pfUp');b.disabled=true;b.textContent='Завантаження…';
+    portalPost('/profile/upload',fd).then(ok=>{if(ok)location.reload();else{b.disabled=false;b.textContent='Завантажити'}});
+  }
+  </script>
+</div>

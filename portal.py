@@ -4,6 +4,7 @@ from functools import wraps
 from zoneinfo import ZoneInfo
 
 import os
+import re
 import secrets
 import tempfile
 
@@ -582,6 +583,7 @@ def chat_delete():
 MAX_MB = int(os.environ.get('MAX_UPLOAD_MB', '10'))  # ліміт одного файлу (безкоштовний Supabase — максимум 50 МБ)
 MAX_ANSWER_FILES = int(os.environ.get('MAX_ANSWER_FILES', '5'))  # файлів-відповідей від одного учня на домашку
 MAX_MEDIA_MB = int(os.environ.get('MAX_MEDIA_MB', '50'))  # ліміт одного фото/відео у вкладці «Файли»
+MAX_BG_MB = int(os.environ.get('MAX_BG_MB', '5'))  # ліміт зображення-заставки
 STORAGE_LIMIT_MB = int(os.environ.get('STORAGE_LIMIT_MB', '5120'))  # квота Storage (5 ГБ), для індикатора
 TMP_DIR = os.path.join(tempfile.gettempdir(), 'school_uploads')
 os.makedirs(TMP_DIR, exist_ok=True)
@@ -900,6 +902,155 @@ def admin_only(fn):
     return w
 
 
+# ---------- Профіль: заставка ----------
+_BG_EXT = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png',
+           '.gif': 'image/gif', '.webp': 'image/webp', '.bmp': 'image/bmp'}   # SVG свідомо заборонено
+_HEX = re.compile(r'^#[0-9a-fA-F]{6}$')
+
+
+def _bg_info(me_id):
+    r = cache.get_background(me_id) if me_id else None
+    if not r:
+        return {'color': '', 'has_file': False, 'filename': '', 'mb': 0, 'date': '', 'css': ''}
+    ts = str(r.get('updated_at') or '')
+    v = re.sub(r'\D', '', ts)[:14] or '0'
+    if r.get('file_path'):
+        css = "body{background:#222 url('/profile/bg?v=%s') center/cover fixed no-repeat !important}" % v
+    else:
+        css = 'body{background:%s !important}' % r['color'] if _HEX.match(r.get('color') or '') else ''
+    return {'color': r.get('color') or '', 'has_file': bool(r.get('file_path')), 'filename': r.get('filename') or '',
+            'mb': round(int(r.get('size') or 0) / 1048576, 2), 'date': str(r.get('uploaded_at') or '')[:10], 'css': css}
+
+
+def _me_id():
+    me = me_record(str(session['user']).strip().lower())
+    return me['id'] if me else None
+
+
+@bp.route('/profile/bg')
+@login_only
+def profile_bg():
+    r = cache.get_background(_me_id())
+    if not r or not r.get('file_path'):
+        return 'Не знайдено', 404
+    try:
+        path = cache.local_file({'path': r['file_path']}, bucket=cache.BG_BUCKET)
+    except Exception:
+        path = None
+    if not path:
+        return 'Файл недоступний', 404
+    resp = send_file(path, mimetype=r.get('mime') or 'image/jpeg', conditional=True)
+    resp.headers['Cache-Control'] = 'private, max-age=86400'     # URL має версію (?v=), тож оновлення підхопиться
+    resp.headers['X-Content-Type-Options'] = 'nosniff'
+    return resp
+
+
+@bp.route('/profile/color', methods=['POST'])
+@login_only
+def profile_color():
+    color = request.form.get('color', '').strip()
+    uid = _me_id()
+    if not uid:
+        return err('Користувача не знайдено', 404)
+    if not _HEX.match(color):
+        return err('Невірний колір (потрібен код виду #RRGGBB)')
+    try:
+        cache.set_bg_color(uid, color)
+    except Exception as e:
+        return err(str(e), 500)
+    return jsonify(ok=True)
+
+
+@bp.route('/profile/upload', methods=['POST'])
+@login_only
+def profile_upload():
+    uid = _me_id()
+    if not uid:
+        return err('Користувача не знайдено', 404)
+    try:
+        files = _save_files('bg', limit_mb=MAX_BG_MB)
+    except ValueError as e:
+        return err(str(e))
+    try:
+        if not files:
+            return err('Оберіть зображення')
+        name = files[0][0]
+        mime = _BG_EXT.get(os.path.splitext(name)[1].lower())
+        if not mime:
+            return err('Дозволені лише зображення: JPG, PNG, GIF, WEBP, BMP')
+        with open(files[0][1], 'rb') as fh:
+            cache.set_bg_file(uid, name, fh, mime)
+    except Exception as e:
+        return err(str(e), 500)
+    finally:
+        _cleanup(files)
+    return jsonify(ok=True)
+
+
+@bp.route('/profile/reset', methods=['POST'])
+@login_only
+def profile_reset():
+    uid = _me_id()
+    try:
+        if uid:
+            cache.clear_bg(uid)
+    except Exception as e:
+        return err(str(e), 500)
+    return jsonify(ok=True)
+
+
+def build_bg_manager():
+    un, rl = user_names(), {u['id']: str(cv(u['fields'].get('Role')) or '').lower() for u in cache.get_users()}
+    rows = []
+    for r in cache.bg_report():
+        rows.append({'uid': r['user_id'], 'name': un.get(r['user_id'], '?'), 'role': ROLE_LABEL.get(rl.get(r['user_id'], ''), ''),
+                     'color': r.get('color') or '', 'file': r.get('filename') or '', 'size': int(r.get('size') or 0),
+                     'mb': round(int(r.get('size') or 0) / 1048576, 2),
+                     'date': str(r.get('uploaded_at') or '')[:10] or '—', 'upd': str(r.get('updated_at') or '')[:10]})
+    rows.sort(key=lambda x: x['size'], reverse=True)
+    return {'files': rows}
+
+
+@bp.route('/backgrounds/delete', methods=['POST'])
+@login_only
+@admin_only
+def bg_delete():
+    try:
+        n = cache.delete_bg_many(request.form.getlist('ids'))
+    except Exception as e:
+        return err(str(e), 500)
+    return jsonify(ok=True, deleted=n)
+
+
+@bp.route('/backgrounds/old', methods=['POST'])
+@login_only
+@admin_only
+def bg_old():
+    try:
+        days = max(1, int(request.form.get('days', '0')))
+    except ValueError:
+        return err('Вкажіть кількість днів')
+    cut = (datetime.utcnow() - timedelta(days=days)).strftime('%Y-%m-%dT%H:%M:%S')
+    ids = [r['user_id'] for r in cache.bg_report()
+           if r.get('file_path') and cache._ts(r.get('uploaded_at')) and cache._ts(r.get('uploaded_at')) < cut]
+    try:
+        n = cache.delete_bg_many(ids)
+    except Exception as e:
+        return err(str(e), 500)
+    return jsonify(ok=True, deleted=n)
+
+
+@bp.route('/backgrounds/orphans', methods=['POST'])
+@login_only
+@admin_only
+def bg_orphans():
+    try:
+        cache.clean_orphans(cache.BG_BUCKET)
+    except Exception as e:
+        return err(str(e), 500)
+    return jsonify(ok=True)
+
+
 def build_file_manager():
     rows = cache.file_report()
     nums = {r['id']: cv(r['fields'].get('№')) for r in cache.get_homework()}
@@ -912,8 +1063,9 @@ def build_file_manager():
     rows.sort(key=lambda r: r['size'], reverse=True)
     hw_mb = sum(r['size'] for r in rows) / 1048576
     media_mb = cache.media_bytes() / 1048576
-    used = hw_mb + media_mb          # квота Storage спільна: домашки + фото/відео
-    return {'files': rows, 'used_mb': round(used, 1), 'hw_mb': round(hw_mb, 1), 'media_mb': round(media_mb, 1), 'limit_mb': STORAGE_LIMIT_MB,
+    bg_mb = cache.bg_bytes() / 1048576
+    used = hw_mb + media_mb + bg_mb  # квота Storage спільна: домашки + фото/відео + заставки
+    return {'files': rows, 'used_mb': round(used, 1), 'hw_mb': round(hw_mb, 1), 'media_mb': round(media_mb, 1), 'bg_mb': round(bg_mb, 1), 'limit_mb': STORAGE_LIMIT_MB,
             'pct': min(100, round(used / STORAGE_LIMIT_MB * 100)) if STORAGE_LIMIT_MB else 0}
 
 
@@ -1090,4 +1242,8 @@ def portal_context(role, email):
         'media_groups': build_media(role, me_id),
         'file_mgr': build_file_manager() if role == 'admin' else None,
         'media_mgr': build_media_manager() if role == 'admin' else None,
+        'bg_mgr': build_bg_manager() if role == 'admin' else None,
+        'profile_bg': _bg_info(me_id),
+        'bg_css': _bg_info(me_id)['css'],
+        'max_bg_mb': MAX_BG_MB,
     }

@@ -32,6 +32,8 @@ BUCKET = "homework"          # приватний Storage-бакет для фа
 
 _client = None
 _last_sync = None
+BG_BUCKET = "backgrounds"                  # заставки профілів
+_bg = {}                                  # user_id -> рядок user_backgrounds
 MEDIA_BUCKET = "media"                     # окремий бакет для вкладки «Файли» (фото/відео)
 _media = {"groups": {}, "files": {}}      # id -> рядок таблиць media_groups / media_files
 _raw = {k: {} for k in _KEYS}     # key -> {id (рядок): рядок таблиці Supabase}
@@ -187,6 +189,7 @@ def refresh_cache():
         for key in _KEYS:
             _load(key)
         _load_media()
+        _load_bg()
         _rebuild()
         _last_sync = datetime.utcnow()
     return _last_sync
@@ -542,6 +545,10 @@ def delete_record(table_key, record_id):
                      for a in _norm_atts(h.get(col)) if a.get("path")]
         _client.table(_DB[table_key]).delete().eq("id", _pk(table_key, rid)).execute()
         _raw[table_key].pop(rid, None)
+        if table_key == "users":
+            old = _bg.pop(rid, None)           # рядок заставки видалився каскадом у БД
+            if old and old.get("file_path"):
+                _rm_bg([old["file_path"]])
         for _, _, _, store in _JUNC.get(table_key, {}).values():
             _links[store].pop(rid, None)
         _reload_deps(table_key)
@@ -695,7 +702,9 @@ def clean_orphans(bucket=None):
     bucket=None — домашки, bucket=MEDIA_BUCKET — вкладка «Файли»."""
     b = bucket or BUCKET
     with _lock:
-        if b == MEDIA_BUCKET:
+        if b == BG_BUCKET:
+            used = {r["file_path"] for r in _bg.values() if r.get("file_path")}
+        elif b == MEDIA_BUCKET:
             used = {f["path"] for f in _media["files"].values()}
         else:
             used = {a["path"] for h in _raw["homework"].values() for col in _FILE_COLS.values()
@@ -866,3 +875,102 @@ def delete_media_many(ids):
                 delete_media(i)
                 n += 1
     return n
+
+
+# ---------------------------------------------------------------
+# Профіль: заставка (колір або власне зображення), бакет "backgrounds"
+# ---------------------------------------------------------------
+
+def _load_bg():
+    _bg.clear()
+    for r in _fetch("user_backgrounds", ("user_id",)):
+        _bg[str(r["user_id"])] = r
+
+
+def get_background(uid):
+    return _bg.get(str(uid))
+
+
+def bg_bytes():
+    return sum(int(r.get("size") or 0) for r in _bg.values())
+
+
+def _rm_bg(paths):
+    for p in paths:
+        try:
+            os.remove(_fpath(p))
+        except OSError:
+            pass
+    try:
+        if paths:
+            _client.storage.from_(BG_BUCKET).remove(list(paths))
+    except Exception:
+        pass
+
+
+def _bg_save(uid, row):
+    """Створює або оновлює єдиний рядок заставки користувача."""
+    uid = str(uid)
+    row = dict(row, updated_at=datetime.now(timezone.utc).isoformat())
+    if uid in _bg:
+        res = _client.table("user_backgrounds").update(row).eq("user_id", uid).execute().data
+    else:
+        res = _client.table("user_backgrounds").insert(dict(row, user_id=uid)).execute().data
+    _bg[uid] = res[0]
+    return res[0]
+
+
+def set_bg_color(uid, color):
+    with _lock:
+        old = (_bg.get(str(uid)) or {}).get("file_path")
+        _bg_save(uid, {"color": color.lower(), "file_path": None, "filename": None,
+                       "mime": None, "size": 0, "uploaded_at": None})
+        if old:
+            _rm_bg([old])
+
+
+def set_bg_file(uid, filename, content, content_type):
+    """content — відкритий файл (rb) або bytes. Колір скидається: діє або колір, або файл."""
+    uid = str(uid)
+    if hasattr(content, "seek"):
+        content.seek(0, 2)
+        size = content.tell()
+        content.seek(0)
+    else:
+        size = len(content)
+    path = f"{uid}/{secrets.token_hex(12)}"
+    _client.storage.from_(BG_BUCKET).upload(
+        path, content, {"content-type": content_type, "cache-control": "3600"})
+    try:
+        with _lock:
+            old = (_bg.get(uid) or {}).get("file_path")
+            _bg_save(uid, {"color": None, "file_path": path, "filename": filename, "mime": content_type,
+                           "size": size, "uploaded_at": datetime.now(timezone.utc).isoformat()})
+            if old:
+                _rm_bg([old])
+    except Exception:
+        _rm_bg([path])
+        raise
+
+
+def clear_bg(uid):
+    delete_bg_many([uid])
+
+
+def delete_bg_many(uids):
+    n = 0
+    with _lock:
+        for u in uids:
+            row = _bg.get(str(u))
+            if not row:
+                continue
+            _client.table("user_backgrounds").delete().eq("user_id", str(u)).execute()
+            _bg.pop(str(u), None)
+            if row.get("file_path"):
+                _rm_bg([row["file_path"]])
+            n += 1
+    return n
+
+
+def bg_report():
+    return [dict(r, user_id=str(r["user_id"])) for r in _bg.values()]

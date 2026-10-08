@@ -1,3 +1,4 @@
+{% if bg_css %}<style>{{ bg_css|safe }}</style>{% endif %}
 <style>
 .ptabs{display:flex;flex-wrap:wrap;gap:6px;border-bottom:2px solid #ddd;margin:0 0 20px}
 .ptab-btn{padding:10px 18px;background:#e9ecef;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:15px;font-weight:bold;color:#333}
@@ -31,6 +32,7 @@
   <button type="button" class="ptab-btn" data-tab="announcements">Оголошення</button>
   <button type="button" class="ptab-btn" data-tab="homework">Домашки</button>
   <button type="button" class="ptab-btn" data-tab="media">Файли</button>
+  <button type="button" class="ptab-btn" data-tab="profile">Профіль</button>
   {% if portal_role == 'admin' %}<button type="button" class="ptab-btn" data-tab="manage">Керування</button>{% endif %}
 </div>
 <script>

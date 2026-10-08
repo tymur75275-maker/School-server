@@ -2,7 +2,7 @@
 <div class="ptab-pane" id="tab-manage">
   <h3 style="margin:0 0 8px">Керування файлами</h3>
   <div style="font-size:13px;color:#555">Зайнято у сховищі: <b>{{ file_mgr.used_mb }} МБ</b> з {{ file_mgr.limit_mb }} МБ
-    (домашки: {{ file_mgr.hw_mb }} МБ, фото й відео: {{ file_mgr.media_mb }} МБ)</div>
+    (домашки: {{ file_mgr.hw_mb }} МБ, фото й відео: {{ file_mgr.media_mb }} МБ, заставки: {{ file_mgr.bg_mb }} МБ)</div>
   <div style="height:10px;background:#e9ecef;border-radius:5px;overflow:hidden;margin:6px 0 4px"><div style="height:100%;width:{{ file_mgr.pct }}%;background:{{ '#dc3545' if file_mgr.pct >= 80 else '#28a745' }}"></div></div>
   <div style="margin-top:22px;padding-top:14px;border-top:2px solid #ddd">
     <h3 style="margin:0 0 8px">Файли домашок <span style="font-weight:normal;font-size:13px;color:#555">· {{ file_mgr.files|length }} шт. · {{ file_mgr.hw_mb }} МБ</span></h3>
@@ -76,6 +76,41 @@
   function mmOld(){
     const d=document.getElementById('mmDays').value;
     if(confirm('Видалити всі фото й відео, завантажені понад '+d+' дн. тому? Це незворотно.'))portalAct('/media/files_old',portalFD({days:d}));
+  }
+  </script>
+  <div style="margin-top:28px;padding-top:14px;border-top:2px solid #ddd">
+    <h3 style="margin:0 0 8px">Заставки профілів <span style="font-weight:normal;font-size:13px;color:#555">· {{ bg_mgr.files|length }} шт. · {{ file_mgr.bg_mb }} МБ</span></h3>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+      <button type="button" class="pbtn pbtn-red" onclick="bgDelSel()">Скинути вибрані</button>
+      <span style="margin-left:10px">Зображення старші за</span>
+      <input type="number" id="bgDays" min="1" value="90" style="width:70px;padding:6px">
+      <span>днів</span>
+      <button type="button" class="pbtn pbtn-red" onclick="bgOld()">Видалити</button>
+      <button type="button" class="pbtn pbtn-gray" onclick="if(confirm('Видалити зі сховища файли без запису в базі?'))portalAct('/backgrounds/orphans',portalFD({}))">Очистити сміття у сховищі</button>
+    </div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:14px;background:#fff">
+      <tr style="background:#f8f9fa"><th style="padding:6px;border:1px solid #ddd;width:30px"><input type="checkbox" onclick="document.querySelectorAll('.bgChk').forEach(c=>c.checked=this.checked)"></th>
+        <th style="padding:6px;border:1px solid #ddd;text-align:left">Користувач</th><th style="padding:6px;border:1px solid #ddd">Роль</th><th style="padding:6px;border:1px solid #ddd">Заставка</th>
+        <th style="padding:6px;border:1px solid #ddd">МБ</th><th style="padding:6px;border:1px solid #ddd">Завантажено</th><th style="padding:6px;border:1px solid #ddd">Змінено</th></tr>
+      {% for r in bg_mgr.files %}
+      <tr><td style="padding:6px;border:1px solid #ddd;text-align:center"><input type="checkbox" class="bgChk" value="{{ r.uid }}"></td>
+        <td style="padding:6px;border:1px solid #ddd">{{ r.name }}</td><td style="padding:6px;border:1px solid #ddd;text-align:center">{{ r.role }}</td>
+        <td style="padding:6px;border:1px solid #ddd;word-break:break-word">{% if r.file %}🖼 {{ r.file }}{% else %}<span style="display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:middle;border:1px solid #999;background:{{ r.color }}"></span> {{ r.color }}{% endif %}</td>
+        <td style="padding:6px;border:1px solid #ddd;text-align:right">{{ r.mb if r.file else '—' }}</td>
+        <td style="padding:6px;border:1px solid #ddd;text-align:center">{{ r.date }}</td><td style="padding:6px;border:1px solid #ddd;text-align:center">{{ r.upd }}</td></tr>
+      {% else %}<tr><td colspan="7" style="padding:10px;color:#666">Заставок немає.</td></tr>{% endfor %}
+    </table></div>
+  </div>
+  <script>
+  function bgDelSel(){
+    const v=[...document.querySelectorAll('.bgChk:checked')].map(c=>c.value);
+    if(!v.length){alert('Оберіть записи');return}
+    if(!confirm('Скинути заставок: '+v.length+'? Файли буде видалено.'))return;
+    const fd=new FormData();v.forEach(x=>fd.append('ids',x));portalAct('/backgrounds/delete',fd);
+  }
+  function bgOld(){
+    const d=document.getElementById('bgDays').value;
+    if(confirm('Видалити зображення-заставки, завантажені понад '+d+' дн. тому? Це незворотно.'))portalAct('/backgrounds/old',portalFD({days:d}));
   }
   </script>
 </div>
