@@ -1,4 +1,6 @@
 import os
+import re
+import hmac
 from flask import Flask, render_template, request, redirect, url_for, session, jsonify, flash
 from supabase import create_client
 from datetime import date
@@ -49,6 +51,42 @@ def clean_value(val):
         return val[0]
     return val if val is not None else ''
 
+
+# ---------- Паролі: хешування через werkzeug.security ----------
+# Формат хеша Werkzeug: "scrypt:32768:8:1$сіль$хеш" або "pbkdf2:sha256:600000$сіль$хеш"
+_HASH_RE = re.compile(r'^(scrypt|pbkdf2):[^$]+\$[^$]+\$[0-9a-f]+$')
+
+
+def is_hashed(value):
+    return bool(_HASH_RE.match(str(value or '')))
+
+
+def hash_password(plain):
+    return generate_password_hash(plain)
+
+
+def verify_password(stored, supplied):
+    """Повертає (збіг, чи_треба_перехешувати).
+    Старі паролі, що ще лежать у базі відкритим текстом, приймаються один раз
+    і одразу замінюються на хеш (див. login)."""
+    stored = str(stored or '')
+    supplied = str(supplied or '')
+    if not stored:
+        return False, False
+    if is_hashed(stored):
+        return check_password_hash(stored, supplied), False
+    ok = hmac.compare_digest(stored.encode('utf-8'), supplied.encode('utf-8'))
+    return ok, ok
+
+
+def public_user(user):
+    """Запис користувача без поля Password — для відповідей API."""
+    if not isinstance(user, dict):
+        return user
+    fields = {k: v for k, v in (user.get('fields') or {}).items() if k != 'Password'}
+    return {**user, 'fields': fields}
+
+
 @app.route('/')
 def home():
     if 'user' in session:
@@ -85,8 +123,14 @@ def login():
             stored_password = clean_value(user_fields.get('Password'))
             user_role = clean_value(user_fields.get('Role'))
             
-            # Перевіряємо, чи збігається пароль
-            if str(stored_password) == password:
+            # Перевіряємо пароль по хешу (старий відкритий пароль — один раз, з автоматичним перехешуванням)
+            ok, needs_rehash = verify_password(stored_password, password)
+            if ok:
+                if needs_rehash:
+                    try:
+                        cache.update_record('users', records[0]['id'], {'Password': hash_password(password)})
+                    except Exception:
+                        pass  # вхід не блокуємо; перехешуємо при наступному вході
                 session['user'] = email
                 role_lower = str(user_role).lower()
                 if role_lower == 'admin':
@@ -468,7 +512,7 @@ def admin_create_user():
     full_name = data.get('full_name')
     email = data.get('email')
     role = data.get('role')  # 'admin', 'teacher', або 'child'
-    password = data.get('password')
+    password = (data.get('password') or '').strip()
     class_name = data.get('class_name')  # Якщо створюємо учня
     is_graded = bool(data.get('is_graded'))
 
@@ -480,7 +524,7 @@ def admin_create_user():
         'Full Name': full_name,
         'Email': email,
         'Role': role,
-        'Password': password
+        'Password': hash_password(password)
     }
     new_user = cache.create_record('users', user_fields)
     user_id = new_user['id']
@@ -497,7 +541,7 @@ def admin_create_user():
             student_fields['Оцінюється'] = True
         cache.create_record('students', student_fields)
 
-    return jsonify({'status': 'success', 'user': new_user})
+    return jsonify({'status': 'success', 'user': public_user(new_user)})
 
 
 
@@ -512,7 +556,7 @@ def admin_update_user():
     full_name = data.get('full_name')
     email = data.get('email')
     role = data.get('role')
-    password = data.get('password')
+    password = (data.get('password') or '').strip()
 
     if not user_id:
         return jsonify({'status': 'error', 'message': 'Відсутній ID користувача'}), 400
@@ -525,7 +569,7 @@ def admin_update_user():
     if role:
         update_fields['Role'] = role
     if password:  # Пароль оновлюємо тільки якщо його ввели в формі
-        update_fields['Password'] = password
+        update_fields['Password'] = hash_password(password)
 
     updated_user = cache.update_record('users', user_id, update_fields)
 
@@ -544,8 +588,27 @@ def admin_update_user():
             cache.create_record('students', {
                 "Ім'я учня": updated_user['fields'].get('Full Name') or '',
                 'Учень': [user_id], **st_fields})
-    return jsonify({'status': 'success', 'user': updated_user})
+    return jsonify({'status': 'success', 'user': public_user(updated_user)})
 
+
+
+@app.route('/admin/hash_passwords', methods=['POST'])
+def admin_hash_passwords():
+    """Одноразово перетворює всі паролі, що лежать відкритим текстом, на хеші."""
+    if session.get('role') != 'admin':
+        return jsonify({'status': 'error', 'message': 'Forbidden'}), 403
+    done = skipped = failed = 0
+    for u in list(cache.get_users()):
+        pw = str(clean_value(u['fields'].get('Password')))
+        if not pw or is_hashed(pw):
+            skipped += 1
+            continue
+        try:
+            cache.update_record('users', u['id'], {'Password': hash_password(pw)})
+            done += 1
+        except Exception:
+            failed += 1
+    return jsonify({'status': 'success', 'hashed': done, 'skipped': skipped, 'failed': failed})
 
 
 @app.route('/admin/delete_user', methods=['POST'])
@@ -629,15 +692,15 @@ def reset_password(token):
         return redirect(url_for('forgot_password'))
 
     if request.method == 'POST':
-        new_password = request.form.get('password')
-        confirm_password = request.form.get('confirm_password')
+        new_password = (request.form.get('password') or '').strip()
+        confirm_password = (request.form.get('confirm_password') or '').strip()
 
         if not new_password or new_password != confirm_password:
             flash('Паролі не збігаються!', 'danger')
             return render_template('reset_password.html', token=token)
 
 
-        cache.update_record('users', user_id, {'Password': new_password})
+        cache.update_record('users', user_id, {'Password': hash_password(new_password)})
 
         flash('Ваш пароль успішно змінено! Тепер ви можете увійти.', 'success')
         return redirect(url_for('login'))
