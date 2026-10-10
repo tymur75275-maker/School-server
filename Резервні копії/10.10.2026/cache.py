@@ -33,8 +33,7 @@ BUCKET = "homework"          # приватний Storage-бакет для фа
 _client = None
 _last_sync = None
 BG_BUCKET = "backgrounds"                  # заставки профілів
-_bg = {}                                  # user_id -> рядок user_backgrounds (color, active_file_id)
-_bgf = {}                                 # id файлу -> рядок background_files
+_bg = {}                                  # user_id -> рядок user_backgrounds
 MEDIA_BUCKET = "media"                     # окремий бакет для вкладки «Файли» (фото/відео)
 _media = {"groups": {}, "files": {}}      # id -> рядок таблиць media_groups / media_files
 _raw = {k: {} for k in _KEYS}     # key -> {id (рядок): рядок таблиці Supabase}
@@ -544,11 +543,12 @@ def delete_record(table_key, record_id):
             h = _raw["homework"].get(rid) or {}
             paths = [a["path"] for col in _FILE_COLS.values()
                      for a in _norm_atts(h.get(col)) if a.get("path")]
-        bgp = _purge_bg_db(rid) if table_key == "users" else []   # заставки користувача (БД)
         _client.table(_DB[table_key]).delete().eq("id", _pk(table_key, rid)).execute()
         _raw[table_key].pop(rid, None)
-        if bgp:
-            _rm_bg(bgp)                        # файли заставок зі Storage
+        if table_key == "users":
+            old = _bg.pop(rid, None)           # рядок заставки видалився каскадом у БД
+            if old and old.get("file_path"):
+                _rm_bg([old["file_path"]])
         for _, _, _, store in _JUNC.get(table_key, {}).values():
             _links[store].pop(rid, None)
         _reload_deps(table_key)
@@ -703,7 +703,7 @@ def clean_orphans(bucket=None):
     b = bucket or BUCKET
     with _lock:
         if b == BG_BUCKET:
-            used = {f["file_path"] for f in _bgf.values()}
+            used = {r["file_path"] for r in _bg.values() if r.get("file_path")}
         elif b == MEDIA_BUCKET:
             used = {f["path"] for f in _media["files"].values()}
         else:
@@ -883,30 +883,16 @@ def delete_media_many(ids):
 
 def _load_bg():
     _bg.clear()
-    _bgf.clear()
     for r in _fetch("user_backgrounds", ("user_id",)):
-        _bg[str(r["user_id"])] = dict(r, user_id=str(r["user_id"]),
-                                      active_file_id=str(r["active_file_id"]) if r.get("active_file_id") else None)
-    for r in _fetch("background_files", ("uploaded_at", "id")):
-        _bgf[str(r["id"])] = dict(r, id=str(r["id"]), user_id=str(r["user_id"]))
-
-
-def _merged(row):
-    """Рядок user_backgrounds + дані активного файлу (file_path, filename, mime, size, uploaded_at)."""
-    f = _bgf.get(row.get("active_file_id") or "")
-    return dict(row,
-                file_path=f["file_path"] if f else None, filename=f.get("filename") if f else None,
-                mime=f.get("mime") if f else None, size=int(f.get("size") or 0) if f else 0,
-                uploaded_at=f.get("uploaded_at") if f else None)
+        _bg[str(r["user_id"])] = r
 
 
 def get_background(uid):
-    r = _bg.get(str(uid))
-    return _merged(r) if r else None
+    return _bg.get(str(uid))
 
 
 def bg_bytes():
-    return sum(int(f.get("size") or 0) for f in _bgf.values())
+    return sum(int(r.get("size") or 0) for r in _bg.values())
 
 
 def _rm_bg(paths):
@@ -923,50 +909,28 @@ def _rm_bg(paths):
 
 
 def _bg_save(uid, row):
-    """Створює або оновлює єдиний рядок налаштувань заставки користувача."""
+    """Створює або оновлює єдиний рядок заставки користувача."""
     uid = str(uid)
     row = dict(row, updated_at=datetime.now(timezone.utc).isoformat())
     if uid in _bg:
         res = _client.table("user_backgrounds").update(row).eq("user_id", uid).execute().data
     else:
         res = _client.table("user_backgrounds").insert(dict(row, user_id=uid)).execute().data
-    r = res[0]
-    _bg[uid] = dict(r, user_id=uid, active_file_id=str(r["active_file_id"]) if r.get("active_file_id") else None)
-    return _bg[uid]
-
-
-def bg_files(uid):
-    """Усі файли заставок користувача, нові зверху; active=True у того, що відображається."""
-    uid = str(uid)
-    act = (_bg.get(uid) or {}).get("active_file_id")
-    rows = [dict(f, active=(f["id"] == act)) for f in _bgf.values() if f["user_id"] == uid]
-    rows.sort(key=lambda r: str(r.get("uploaded_at") or ""), reverse=True)
-    return rows
-
-
-def bg_files_all():
-    return [dict(f) for f in _bgf.values()]
-
-
-def get_bg_file(uid, fid):
-    f = _bgf.get(str(fid))
-    return dict(f) if f and f["user_id"] == str(uid) else None
+    _bg[uid] = res[0]
+    return res[0]
 
 
 def set_bg_color(uid, color):
-    """Колір вимикає файл-заставку, але самі файли лишаються у списку."""
     with _lock:
-        _bg_save(uid, {"color": color.lower(), "active_file_id": None})
+        old = (_bg.get(str(uid)) or {}).get("file_path")
+        _bg_save(uid, {"color": color.lower(), "file_path": None, "filename": None,
+                       "mime": None, "size": 0, "uploaded_at": None})
+        if old:
+            _rm_bg([old])
 
 
-def deactivate_bg(uid):
-    with _lock:
-        if str(uid) in _bg:
-            _bg_save(uid, {"color": None, "active_file_id": None})
-
-
-def add_bg_file(uid, filename, content, content_type, activate=True):
-    """content — відкритий файл (rb) або bytes. Додає файл у список (і за потреби робить активним)."""
+def set_bg_file(uid, filename, content, content_type):
+    """content — відкритий файл (rb) або bytes. Колір скидається: діє або колір, або файл."""
     uid = str(uid)
     if hasattr(content, "seek"):
         content.seek(0, 2)
@@ -977,87 +941,36 @@ def add_bg_file(uid, filename, content, content_type, activate=True):
     path = f"{uid}/{secrets.token_hex(12)}"
     _client.storage.from_(BG_BUCKET).upload(
         path, content, {"content-type": content_type, "cache-control": "3600"})
-    row_id = None
     try:
         with _lock:
-            res = _client.table("background_files").insert({
-                "user_id": uid, "file_path": path, "filename": filename, "mime": content_type,
-                "size": size}).execute().data[0]
-            row_id = str(res["id"])
-            f = dict(res, id=row_id, user_id=uid)
-            _bgf[row_id] = f
-            if activate:
-                _bg_save(uid, {"color": None, "active_file_id": row_id})
-        return f
+            old = (_bg.get(uid) or {}).get("file_path")
+            _bg_save(uid, {"color": None, "file_path": path, "filename": filename, "mime": content_type,
+                           "size": size, "uploaded_at": datetime.now(timezone.utc).isoformat()})
+            if old:
+                _rm_bg([old])
     except Exception:
-        if row_id:
-            try:
-                _client.table("background_files").delete().eq("id", row_id).execute()
-            except Exception:
-                pass
-            _bgf.pop(row_id, None)
         _rm_bg([path])
         raise
 
 
-def select_bg_file(uid, fid):
-    with _lock:
-        f = get_bg_file(uid, fid)
-        if not f:
-            raise KeyError("Файл не знайдено")
-        _bg_save(uid, {"color": None, "active_file_id": f["id"]})
-
-
-def delete_bg_files(fids, uid=None):
-    """Видаляє файли заставок (uid — перевірка власника). Якщо видалено активний —
-    активним стає найновіший із решти, а якщо решти немає — стандартний фон."""
-    n = 0
-    with _lock:
-        for fid in fids:
-            f = _bgf.get(str(fid))
-            if not f or (uid is not None and f["user_id"] != str(uid)):
-                continue
-            u = f["user_id"]
-            cur = _bg.get(u)
-            if cur and cur.get("active_file_id") == f["id"]:     # спершу знімаємо посилання (FK)
-                rest = [x for x in bg_files(u) if x["id"] != f["id"]]
-                _bg_save(u, {"color": None, "active_file_id": rest[0]["id"] if rest else None})
-            _client.table("background_files").delete().eq("id", f["id"]).execute()
-            _bgf.pop(f["id"], None)
-            _rm_bg([f["file_path"]])
-            n += 1
-    return n
-
-
-def _purge_bg_db(uid):
-    """Прибирає з БД і кешу всі заставки користувача; повертає шляхи файлів для видалення зі Storage."""
-    uid = str(uid)
-    fids = [i for i, f in _bgf.items() if f["user_id"] == uid]
-    if uid in _bg:
-        _client.table("user_backgrounds").delete().eq("user_id", uid).execute()
-        _bg.pop(uid, None)
-    if fids:
-        _client.table("background_files").delete().in_("id", fids).execute()
-    return [_bgf.pop(i)["file_path"] for i in fids]
+def clear_bg(uid):
+    delete_bg_many([uid])
 
 
 def delete_bg_many(uids):
-    """Повністю прибирає заставки користувачів (усі файли + налаштування)."""
     n = 0
     with _lock:
         for u in uids:
-            u = str(u)
-            if u not in _bg and not any(f["user_id"] == u for f in _bgf.values()):
+            row = _bg.get(str(u))
+            if not row:
                 continue
-            _rm_bg(_purge_bg_db(u))
+            _client.table("user_backgrounds").delete().eq("user_id", str(u)).execute()
+            _bg.pop(str(u), None)
+            if row.get("file_path"):
+                _rm_bg([row["file_path"]])
             n += 1
     return n
 
 
 def bg_report():
-    tot, cnt = {}, {}
-    for f in _bgf.values():
-        tot[f["user_id"]] = tot.get(f["user_id"], 0) + int(f.get("size") or 0)
-        cnt[f["user_id"]] = cnt.get(f["user_id"], 0) + 1
-    return [dict(_merged(r), total_size=tot.get(r["user_id"], 0), count=cnt.get(r["user_id"], 0))
-            for r in _bg.values()]
+    return [dict(r, user_id=str(r["user_id"])) for r in _bg.values()]

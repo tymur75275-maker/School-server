@@ -1,0 +1,51 @@
+<div class="ptab-pane" id="tab-discipline">
+  {% if portal_role != 'student' %}<button type="button" class="pbtn pbtn-green" onclick="discOpen()">+ Додати догану</button>{% endif %}
+  <div class="cards">
+    {% for d in discipline_list %}
+    <div class="pcard {{ 'unread' if d.status == 'Не прочитано' else 'ok' }}">
+      <div class="pcard-top"><span>№{{ d.num }}</span>
+        <span class="badge {{ 'b-bad' if d.status == 'Не прочитано' else 'b-ok' }}">{{ d.status }}</span></div>
+      {% if portal_role != 'student' %}<div><b>Учень:</b> {{ d.student_name }}</div>{% endif %}
+      <div class="pcard-text"><b>Причина:</b> {{ d.reason }}</div>
+      <div><b>Вчитель:</b> {{ d.teacher_name or '—' }}</div>
+      <div class="pcard-actions">
+        {% if portal_role == 'student' %}
+          {% if d.status == 'Не прочитано' %}<button type="button" class="pbtn pbtn-green" onclick="portalAct('/discipline/read',portalFD({id:'{{ d.id }}'}))">Прочитано</button>{% endif %}
+        {% else %}
+          <button type="button" class="pbtn" data-id="{{ d.id }}" data-student="{{ d.student_id }}" data-reason="{{ d.reason }}" data-status="{{ d.status }}" onclick="discOpen(this.dataset)">Редагувати</button>
+          <button type="button" class="pbtn pbtn-red" onclick="if(confirm('Видалити догану?'))portalAct('/discipline/delete',portalFD({id:'{{ d.id }}'}))">Видалити</button>
+        {% endif %}
+      </div>
+    </div>
+    {% else %}<p style="color:#666">Доган немає.</p>{% endfor %}
+  </div>
+  {% if portal_role != 'student' %}
+  <div class="pm-overlay" id="discModal"><div class="pm-box">
+    <h4 id="discTitle">Догана</h4>
+    <input type="hidden" id="discId">
+    <label>Учень</label>
+    <select id="discStudent">{% for s in portal_students %}<option value="{{ s.id }}">{{ s.name }}{% if s.cls %} ({{ s.cls }}){% endif %}</option>{% endfor %}</select>
+    <label>Причина</label><textarea id="discReason" rows="4"></textarea>
+    <div id="discStatusWrap"><label>Статус</label>
+      <select id="discStatus"><option>Не прочитано</option><option>Прочитано</option></select></div>
+    <div class="pm-actions">
+      <button type="button" class="pbtn pbtn-gray" onclick="document.getElementById('discModal').style.display='none'">Скасувати</button>
+      <button type="button" class="pbtn pbtn-green" onclick="discSave()">Зберегти</button>
+    </div>
+  </div></div>
+  <script>
+  function discOpen(d){
+    const $=id=>document.getElementById(id); d=d||{};
+    $('discId').value=d.id||''; $('discTitle').textContent=d.id?'Редагувати догану':'Нова догана';
+    if(d.student) $('discStudent').value=d.student;
+    $('discReason').value=d.reason||''; $('discStatus').value=d.status||'Не прочитано';
+    $('discStatusWrap').style.display=d.id?'':'none';
+    $('discModal').style.display='flex';
+  }
+  function discSave(){
+    const $=id=>document.getElementById(id);
+    portalAct('/discipline/save',portalFD({id:$('discId').value,student_id:$('discStudent').value,reason:$('discReason').value,status:$('discStatus').value}));
+  }
+  </script>
+  {% endif %}
+</div>

@@ -1,0 +1,57 @@
+{% if bg_css %}<style>{{ bg_css|safe }}</style>{% endif %}
+<style>
+.ptabs{display:flex;flex-wrap:wrap;gap:6px;border-bottom:2px solid #ddd;margin:0 0 20px}
+.ptab-btn{padding:10px 18px;background:#e9ecef;border:none;border-radius:6px 6px 0 0;cursor:pointer;font-size:15px;font-weight:bold;color:#333}
+.ptab-btn.active{background:#007bff;color:#fff}
+.ptab-pane{display:none}.ptab-pane.active{display:block}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-top:14px}
+.pcard{background:#fff;border:1px solid #dee2e6;border-left:5px solid #6c757d;border-radius:8px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);display:flex;flex-direction:column;gap:6px}
+.pcard.unread{border-left-color:#dc3545}.pcard.ok{border-left-color:#28a745}.pcard.mand{border-left-color:#fd7e14}
+.pcard-top{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:#666}
+.pcard-text{white-space:pre-wrap;word-break:break-word}
+.pcard-actions{display:flex;gap:8px;margin-top:auto;padding-top:8px;flex-wrap:wrap}
+.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:bold}
+.b-bad{background:#f8d7da;color:#721c24}.b-ok{background:#d4edda;color:#155724}.b-warn{background:#ffe5d0;color:#8a4500}
+.pbtn{border:none;border-radius:4px;padding:8px 14px;cursor:pointer;color:#fff;font-size:14px;background:#007bff}
+.pbtn-green{background:#28a745}.pbtn-red{background:#dc3545}.pbtn-gray{background:#6c757d}.pbtn:disabled{opacity:.5;cursor:not-allowed}
+.pm-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);justify-content:center;align-items:center;z-index:2000}
+.pm-box{background:#fff;padding:22px;border-radius:8px;width:440px;max-width:92vw;max-height:90vh;overflow:auto;box-shadow:0 4px 15px rgba(0,0,0,.25)}
+.pm-box h4{margin:0 0 12px}.pm-box label{display:block;font-weight:bold;margin:10px 0 4px}
+.pm-box select,.pm-box textarea,.pm-box input[type=datetime-local]{width:100%;box-sizing:border-box;padding:8px;border:1px solid #ccc;border-radius:4px;font-size:14px}
+.pm-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.stats-checks{display:flex;flex-wrap:wrap;gap:6px 16px;margin:12px 0}
+.stats-checks label{display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-weight:normal}
+.sw{width:12px;height:12px;border-radius:2px;display:inline-block}
+.ptab-stub{color:#666;padding:20px;background:#fff;border-radius:6px}
+</style>
+<div class="ptabs">
+  {% if show_grades %}<button type="button" class="ptab-btn" data-tab="grades">Оцінки</button>
+  <button type="button" class="ptab-btn" data-tab="stats">Статистика</button>{% endif %}
+  <button type="button" class="ptab-btn" data-tab="discipline">Догани</button>
+  <button type="button" class="ptab-btn" data-tab="chats">Чати</button>
+  <button type="button" class="ptab-btn" data-tab="announcements">Оголошення</button>
+  <button type="button" class="ptab-btn" data-tab="homework">Домашки</button>
+  <button type="button" class="ptab-btn" data-tab="media">Файли</button>
+  <button type="button" class="ptab-btn" data-tab="profile">Профіль</button>
+  {% if portal_role == 'admin' %}<button type="button" class="ptab-btn" data-tab="manage">Керування</button>{% endif %}
+</div>
+<script>
+function portalPost(url,data){
+  return fetch(url,{method:'POST',body:data}).then(r=>r.json().catch(()=>({})).then(j=>({r,j}))).then(({r,j})=>{
+    if(!r.ok||!j.ok){alert(j.error||'Помилка');return false}
+    return true;
+  }).catch(()=>{alert('Помилка мережі');return false});
+}
+function portalAct(url,data){return portalPost(url,data).then(ok=>{if(ok)location.reload()})}
+function portalFD(o){const fd=new FormData();for(const k in o)fd.append(k,o[k]);return fd}
+function showPortalTab(name){
+  if(!document.getElementById('tab-'+name)){const fb=document.querySelector('.ptab-btn');name=fb?fb.dataset.tab:'grades'}
+  document.querySelectorAll('.ptab-pane').forEach(p=>p.classList.toggle('active',p.id==='tab-'+name));
+  document.querySelectorAll('.ptab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
+  history.replaceState(null,'','#'+name);
+}
+document.addEventListener('DOMContentLoaded',function(){
+  document.querySelectorAll('.ptab-btn').forEach(b=>b.addEventListener('click',()=>showPortalTab(b.dataset.tab)));
+  showPortalTab(location.hash.slice(1)||'grades');
+});
+</script>

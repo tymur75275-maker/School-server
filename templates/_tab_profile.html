@@ -1,6 +1,6 @@
 <div class="ptab-pane" id="tab-profile">
   <h3 style="margin:0 0 10px">Фон кабінету</h3>
-  <div style="background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:14px;max-width:560px">
+  <div style="background:#fff;border:1px solid #dee2e6;border-radius:8px;padding:14px;max-width:640px">
     <div style="font-size:13px;color:#555;margin-bottom:10px">
       Зараз:
       {% if profile_bg.has_file %}<b>власне зображення</b> «{{ profile_bg.filename }}» ({{ profile_bg.mb }} МБ{% if profile_bg.date %}, завантажено {{ profile_bg.date }}{% endif %})
@@ -15,14 +15,45 @@
       <button type="button" class="pbtn pbtn-green" onclick="pfSaveColor()">Зберегти колір</button>
     </div>
 
-    <label style="display:block;font-weight:bold;margin:16px 0 4px">Власне зображення (до {{ max_bg_mb }} МБ)</label>
+    <label style="display:block;font-weight:bold;margin:16px 0 4px">Мої зображення <span style="font-weight:normal;color:#555">({{ bg_files|length }} / {{ max_wallpaper_pcs }})</span></label>
+    {% if bg_files %}
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:14px">
+      <tr style="background:#f8f9fa">
+        <th style="padding:6px;border:1px solid #ddd;width:76px">Фото</th>
+        <th style="padding:6px;border:1px solid #ddd;text-align:left">Файл</th>
+        <th style="padding:6px;border:1px solid #ddd">МБ</th>
+        <th style="padding:6px;border:1px solid #ddd">Дата</th>
+        <th style="padding:6px;border:1px solid #ddd">Дії</th>
+      </tr>
+      {% for f in bg_files %}
+      <tr{% if f.active %} style="background:#f1faf3"{% endif %}>
+        <td style="padding:6px;border:1px solid #ddd;text-align:center"><a href="{{ f.url }}" target="_blank"><img src="{{ f.url }}" alt="" loading="lazy" style="width:64px;height:40px;object-fit:cover;border-radius:3px;display:block"></a></td>
+        <td style="padding:6px;border:1px solid #ddd;word-break:break-word">{{ f.name }}{% if f.active %} <span class="badge b-ok">Активна</span>{% endif %}</td>
+        <td style="padding:6px;border:1px solid #ddd;text-align:right">{{ f.mb }}</td>
+        <td style="padding:6px;border:1px solid #ddd;text-align:center">{{ f.date or '—' }}</td>
+        <td style="padding:6px;border:1px solid #ddd;text-align:center;white-space:nowrap">
+          {% if not f.active %}<button type="button" class="pbtn pbtn-green" style="padding:5px 10px" onclick="pfSelect('{{ f.id }}')">Обрати</button>{% endif %}
+          <button type="button" class="pbtn pbtn-red" style="padding:5px 10px" onclick="pfDelete('{{ f.id }}')">Видалити</button>
+        </td>
+      </tr>
+      {% endfor %}
+    </table></div>
+    {% else %}
+    <div style="font-size:13px;color:#666">Ще немає завантажених зображень.</div>
+    {% endif %}
+
+    <label style="display:block;font-weight:bold;margin:16px 0 4px">Завантажити (до {{ max_bg_mb }} МБ кожне)</label>
+    {% if bg_files|length >= max_wallpaper_pcs %}
+    <div style="font-size:13px;color:#8a4500;background:#ffe5d0;border-radius:6px;padding:8px">Досягнуто ліміт — {{ max_wallpaper_pcs }} зображень. Видаліть зайві, щоб завантажити нові.</div>
+    {% else %}
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <input type="file" id="pfFile" accept="image/jpeg,image/png,image/gif,image/webp,image/bmp" style="max-width:100%">
+      <input type="file" id="pfFile" multiple accept="image/jpeg,image/png,image/gif,image/webp,image/bmp" style="max-width:100%">
       <button type="button" class="pbtn pbtn-green" id="pfUp" onclick="pfUpload()">Завантажити</button>
     </div>
-    <div style="font-size:12px;color:#888;margin-top:4px">JPG, PNG, GIF, WEBP або BMP. Новий колір чи файл замінює попередній.</div>
+    <div style="font-size:12px;color:#888;margin-top:4px">JPG, PNG, GIF, WEBP або BMP. Можна обрати кілька файлів (ще {{ max_wallpaper_pcs - bg_files|length }}). Останній завантажений стає активним — потім його можна змінити у списку.</div>
+    {% endif %}
 
-    <div style="margin-top:16px"><button type="button" class="pbtn pbtn-gray" onclick="if(confirm('Повернути стандартний фон?'))portalAct('/profile/reset',portalFD({}))">Скинути до стандартного</button></div>
+    <div style="margin-top:16px"><button type="button" class="pbtn pbtn-gray" onclick="if(confirm('Повернути стандартний фон? Завантажені зображення залишаться у списку.'))portalAct('/profile/reset',portalFD({}))">Скинути до стандартного</button></div>
   </div>
   <script>
   (function(){
@@ -35,10 +66,16 @@
     if(!/^#[0-9a-fA-F]{6}$/.test(v)){alert('Вкажіть колір у форматі #RRGGBB');return}
     portalAct('/profile/color',portalFD({color:v}));
   }
+  function pfSelect(id){portalAct('/profile/bg/select',portalFD({id:id}))}
+  function pfDelete(id){
+    if(confirm('Видалити це зображення? Це незворотно.'))portalAct('/profile/bg/delete',portalFD({id:id}));
+  }
   function pfUpload(){
     const f=document.getElementById('pfFile').files;
     if(!f.length){alert('Оберіть зображення');return}
-    const fd=new FormData();fd.append('bg',f[0]);
+    const left={{ max_wallpaper_pcs - bg_files|length }};
+    if(f.length>left){alert('Можна завантажити ще максимум '+left+' зображень');return}
+    const fd=new FormData();for(const x of f)fd.append('bg',x);
     const b=document.getElementById('pfUp');b.disabled=true;b.textContent='Завантаження…';
     portalPost('/profile/upload',fd).then(ok=>{if(ok)location.reload();else{b.disabled=false;b.textContent='Завантажити'}});
   }
